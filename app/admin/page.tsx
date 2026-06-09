@@ -212,6 +212,7 @@ export default function AdminDashboard() {
     } catch (error) { alert("❌ Error al registrar."); }
   };
   const eliminarMovimiento = async (id: string) => { if(window.confirm("¿Eliminar registro?")) await deleteDoc(doc(db, "finanzas", id)); };
+  
   const registrarAbono = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!montoAbono || Number(montoAbono) <= 0) return alert("Ingresa un monto válido");
@@ -222,17 +223,19 @@ export default function AdminDashboard() {
     } catch (error) { alert("Error al registrar el abono."); }
   };
 
-  const totalIngresos = movimientos.filter(m => ['ingreso', 'venta', 'prestamo'].includes(m.tipo)).reduce((acc, curr) => acc + curr.monto, 0);
-  const totalEgresos = movimientos.filter(m => ['egreso', 'cuota'].includes(m.tipo)).reduce((acc, curr) => acc + curr.monto, 0);
-  const saldoCaja = totalIngresos - totalEgresos;
+  // NUEVA MATEMÁTICA FINANCIERA (Abonos no se consideran "egresos operativos" para este cálculo, ya están descontando la deuda)
+  const ventasYOtrosIngresos = movimientos.filter(m => ['ingreso', 'venta'].includes(m.tipo)).reduce((acc, curr) => acc + curr.monto, 0);
+  const gastosOperativos = movimientos.filter(m => m.tipo === 'egreso').reduce((acc, curr) => acc + curr.monto, 0);
+  
   const prestamosActivos = movimientos.filter(m => m.tipo === 'prestamo').map(prestamo => {
     const pagado = movimientos.filter(m => m.tipo === 'cuota' && m.prestamoId === prestamo.id).reduce((acc, curr) => acc + curr.monto, 0);
     return { ...prestamo, pagado: pagado, restante: prestamo.monto - pagado };
   }).filter(p => p.restante > 0); 
-  const deudaTotalAcumulada = prestamosActivos.reduce((acc, curr) => acc + curr.restante, 0);
   
-  // NUEVO CÁLCULO DE DINERO REAL
-  const saldoRealDisponible = saldoCaja - deudaTotalAcumulada;
+  const deudaTotalAcumulada = prestamosActivos.reduce((acc, curr) => acc + curr.restante, 0);
+
+  // LA FÓRMULA EXACTA DEL USUARIO: Partimos de 0, restamos Deudas y Gastos, y sumamos Ventas e Ingresos
+  const saldoNetoCalculado = ventasYOtrosIngresos - gastosOperativos - deudaTotalAcumulada;
 
   // ==========================================
   // RENDERIZADO (LOGIN)
@@ -490,26 +493,29 @@ export default function AdminDashboard() {
           {/* MÓDULO: FINANZAS */}
           {vistaActiva === 'finanzas' && (
             <div className="max-w-6xl mx-auto space-y-8">
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* TARJETA PRINCIPAL: DINERO REAL DISPONIBLE */}
-                <div className={`p-8 rounded-2xl shadow-lg border-2 flex flex-col justify-center ${saldoRealDisponible >= 0 ? 'bg-emerald-50 border-emerald-500' : 'bg-red-50 border-red-500'}`}>
-                  <h4 className="text-sm font-bold text-emerald-800 uppercase tracking-widest">Dinero Disponible Real</h4>
-                  <p className={`text-5xl font-black mt-2 ${saldoRealDisponible >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                    ${saldoRealDisponible.toLocaleString("es-CL")}
+                <div className={`p-8 rounded-3xl shadow-lg border-2 flex flex-col justify-center relative overflow-hidden ${saldoNetoCalculado >= 0 ? 'bg-emerald-50 border-emerald-400' : 'bg-red-50 border-red-400'}`}>
+                  <h4 className="text-sm font-bold uppercase tracking-widest relative z-10 text-stone-600">Balance Neto Disponible</h4>
+                  <p className={`text-6xl font-black mt-2 relative z-10 tracking-tight ${saldoNetoCalculado >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                    {saldoNetoCalculado < 0 ? '-' : ''}${Math.abs(saldoNetoCalculado).toLocaleString("es-CL")}
                   </p>
-                  <p className="text-xs text-emerald-600 mt-2 font-bold">
-                    * Dinero en caja (${saldoCaja.toLocaleString("es-CL")}) menos Deuda Total (${deudaTotalAcumulada.toLocaleString("es-CL")})
+                  <p className="text-xs mt-3 font-bold relative z-10 text-stone-500">
+                    * Cálculo: Ventas e Ingresos - Egresos - Total Préstamos Activos
                   </p>
                 </div>
                 
-                {/* TARJETAS SECUNDARIAS */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200 flex flex-col justify-center">
-                    <h4 className="text-xs font-bold text-stone-500 uppercase tracking-wide">Egresos Registrados</h4>
-                    <p className="text-2xl font-black mt-1 text-stone-700">${totalEgresos.toLocaleString("es-CL")}</p>
+                    <h4 className="text-xs font-bold text-stone-500 uppercase tracking-wide">Ventas y Extras</h4>
+                    <p className="text-2xl font-black mt-1 text-emerald-600">${ventasYOtrosIngresos.toLocaleString("es-CL")}</p>
                   </div>
-                  <div className="bg-orange-50 p-6 rounded-2xl shadow-sm border border-orange-200 flex flex-col justify-center">
-                    <h4 className="text-xs font-bold text-stone-500 uppercase tracking-wide">Deuda Préstamos Activos</h4>
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200 flex flex-col justify-center">
+                    <h4 className="text-xs font-bold text-stone-500 uppercase tracking-wide">Egresos Registrados</h4>
+                    <p className="text-2xl font-black mt-1 text-stone-700">${gastosOperativos.toLocaleString("es-CL")}</p>
+                  </div>
+                  <div className="bg-orange-50 p-6 rounded-2xl shadow-sm border border-orange-200 flex flex-col justify-center col-span-2">
+                    <h4 className="text-xs font-bold text-orange-800 uppercase tracking-wide">Deuda Total Préstamos Pendientes</h4>
                     <p className="text-2xl font-black mt-1 text-orange-700">${deudaTotalAcumulada.toLocaleString("es-CL")}</p>
                   </div>
                 </div>
