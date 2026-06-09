@@ -16,16 +16,23 @@ export default function AdminDashboard() {
   const [nombre, setNombre] = useState("");
   const [precio, setPrecio] = useState("");
   const [stock, setStock] = useState("");
+  const [tipoOferta, setTipoOferta] = useState("mayor"); // 'mayor' o 'pack'
+  const [cantidadOferta, setCantidadOferta] = useState(""); 
+  const [precioOferta, setPrecioOferta] = useState("");     
+  
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [editNombre, setEditNombre] = useState("");
   const [editPrecio, setEditPrecio] = useState("");
   const [editStock, setEditStock] = useState("");
+  const [editTipoOferta, setEditTipoOferta] = useState("mayor");
+  const [editCantidadOferta, setEditCantidadOferta] = useState(""); 
+  const [editPrecioOferta, setEditPrecioOferta] = useState("");     
 
   // --- ESTADOS: PEDIDOS ---
   const [carrito, setCarrito] = useState<any[]>([]);
   const [nombreCliente, setNombreCliente] = useState("");
   const [rutCliente, setRutCliente] = useState("");
-  const [descuentoPedido, setDescuentoPedido] = useState(""); // NUEVO: Estado para ofertas
+  const [descuentoGlobal, setDescuentoGlobal] = useState(""); 
 
   // --- ESTADOS: FINANZAS ---
   const [movimientos, setMovimientos] = useState<any[]>([]);
@@ -70,24 +77,60 @@ export default function AdminDashboard() {
   // --- LÓGICA INVENTARIO ---
   const agregarProducto = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nombre || !precio || !stock) return alert("⚠️ Llena todos los campos.");
+    if (!nombre || !precio || !stock) return alert("⚠️ Llena Nombre, Precio Normal y Stock.");
     try {
-      await addDoc(collection(db, "productos"), { nombre, precio: Number(precio), stock: Number(stock) });
-      setNombre(""); setPrecio(""); setStock("");
+      await addDoc(collection(db, "productos"), { 
+        nombre, 
+        precio: Number(precio), 
+        stock: Number(stock),
+        tipoOferta: tipoOferta,
+        cantidadOferta: Number(cantidadOferta) || 0,
+        precioOferta: Number(precioOferta) || 0
+      });
+      setNombre(""); setPrecio(""); setStock(""); setCantidadOferta(""); setPrecioOferta(""); setTipoOferta("mayor");
     } catch (error) { alert("❌ Error al guardar producto."); }
   };
+  
   const eliminarProducto = async (id: string) => { if(window.confirm("¿Eliminar producto?")) await deleteDoc(doc(db, "productos", id)); };
-  const iniciarEdicion = (prod: any) => { setEditandoId(prod.id); setEditNombre(prod.nombre); setEditPrecio(prod.precio); setEditStock(prod.stock); };
+  
+  const iniciarEdicion = (prod: any) => { 
+    setEditandoId(prod.id); setEditNombre(prod.nombre); setEditPrecio(prod.precio); setEditStock(prod.stock);
+    setEditTipoOferta(prod.tipoOferta || "mayor"); setEditCantidadOferta(prod.cantidadOferta || ""); setEditPrecioOferta(prod.precioOferta || "");
+  };
+  
   const cancelarEdicion = () => setEditandoId(null);
+  
   const guardarEdicion = async (id: string) => {
-    if (!editNombre || !editPrecio || !editStock) return alert("⚠️ Campos vacíos.");
+    if (!editNombre || !editPrecio || !editStock) return alert("⚠️ Campos requeridos vacíos.");
     try {
-      await updateDoc(doc(db, "productos", id), { nombre: editNombre, precio: Number(editPrecio), stock: Number(editStock) });
+      await updateDoc(doc(db, "productos", id), { 
+        nombre: editNombre, 
+        precio: Number(editPrecio), 
+        stock: Number(editStock),
+        tipoOferta: editTipoOferta,
+        cantidadOferta: Number(editCantidadOferta) || 0,
+        precioOferta: Number(editPrecioOferta) || 0
+      });
       setEditandoId(null);
     } catch (error) { alert("❌ Error al actualizar."); }
   };
 
-  // --- LÓGICA PEDIDOS ---
+  // --- LÓGICA PEDIDOS (NUEVA MATEMÁTICA DE OFERTAS) ---
+  const calcularSubtotalItem = (item: any, cantidadSeleccionada: number) => {
+    if (item.cantidadOferta > 0 && cantidadSeleccionada >= item.cantidadOferta) {
+      if (item.tipoOferta === 'pack') {
+        // Ejemplo: 3 por 1000. Si lleva 4 -> (1 pack * 1000) + (1 suelto * 400)
+        const packs = Math.floor(cantidadSeleccionada / item.cantidadOferta);
+        const sueltos = cantidadSeleccionada % item.cantidadOferta;
+        return (packs * item.precioOferta) + (sueltos * item.precio);
+      } else {
+        // Ejemplo: Mayor a 6 a 1700 c/u. Si lleva 7 -> 7 * 1700
+        return cantidadSeleccionada * item.precioOferta;
+      }
+    }
+    return cantidadSeleccionada * item.precio;
+  };
+
   const agregarAlCarrito = (prod: any) => {
     const existe = carrito.find(item => item.id === prod.id);
     if (existe) {
@@ -98,10 +141,8 @@ export default function AdminDashboard() {
     }
   };
 
-  // NUEVA FUNCIÓN: Actualizar cantidad manualmente
   const actualizarCantidadCarrito = (id: string, cantidad: string) => {
     const nuevaCantidad = parseInt(cantidad) || 0;
-    
     setCarrito(carrito.map(item => {
       if (item.id === id) {
         if (nuevaCantidad > item.stock) {
@@ -111,15 +152,15 @@ export default function AdminDashboard() {
         return { ...item, cantidad: nuevaCantidad };
       }
       return item;
-    }).filter(item => item.cantidad > 0)); // Si la cantidad es 0, lo elimina del carrito
+    }).filter(item => item.cantidad > 0)); 
   };
 
   const removerDelCarrito = (id: string) => setCarrito(carrito.filter(item => item.id !== id));
   
   // CÁLCULOS DEL PEDIDO
-  const subtotalPedido = carrito.reduce((total, item) => total + (item.precio * item.cantidad), 0);
-  const descuentoAplicado = Number(descuentoPedido) || 0;
-  const totalPedido = Math.max(0, subtotalPedido - descuentoAplicado); // Evita que el total sea negativo
+  const subtotalPedido = carrito.reduce((total, item) => total + calcularSubtotalItem(item, item.cantidad), 0);
+  const descuentoAplicado = Number(descuentoGlobal) || 0;
+  const totalPedido = Math.max(0, subtotalPedido - descuentoAplicado); 
 
   const procesarVenta = async () => {
     if (carrito.length === 0) return alert("Carrito vacío");
@@ -127,13 +168,19 @@ export default function AdminDashboard() {
 
     try {
       const fechaActual = new Date().toISOString();
+      
+      const itemsProcesados = carrito.map(item => ({
+        ...item,
+        subtotalAplicado: calcularSubtotalItem(item, item.cantidad)
+      }));
+
       await addDoc(collection(db, "pedidos"), { 
         cliente: nombreCliente, 
         rut: rutCliente, 
         fecha: fechaActual, 
-        items: carrito, 
+        items: itemsProcesados, 
         subtotal: subtotalPedido,
-        descuento: descuentoAplicado,
+        descuentoGlobal: descuentoAplicado,
         total: totalPedido, 
         estado: "Completado" 
       });
@@ -145,12 +192,12 @@ export default function AdminDashboard() {
       await addDoc(collection(db, "finanzas"), { 
         tipo: "venta", 
         monto: totalPedido, 
-        descripcion: `Venta a ${nombreCliente} ${descuentoAplicado > 0 ? '(Con Oferta)' : ''}`, 
+        descripcion: `Venta a ${nombreCliente}`, 
         fecha: fechaActual 
       });
       
       alert("¡Venta registrada con éxito y enviada a Finanzas!");
-      setCarrito([]); setNombreCliente(""); setRutCliente(""); setDescuentoPedido("");
+      setCarrito([]); setNombreCliente(""); setRutCliente(""); setDescuentoGlobal("");
     } catch (error) { alert("Hubo un error al registrar la venta."); }
   };
 
@@ -164,7 +211,6 @@ export default function AdminDashboard() {
     } catch (error) { alert("❌ Error al registrar."); }
   };
   const eliminarMovimiento = async (id: string) => { if(window.confirm("¿Eliminar registro?")) await deleteDoc(doc(db, "finanzas", id)); };
-
   const registrarAbono = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!montoAbono || Number(montoAbono) <= 0) return alert("Ingresa un monto válido");
@@ -178,7 +224,6 @@ export default function AdminDashboard() {
   const totalIngresos = movimientos.filter(m => ['ingreso', 'venta', 'prestamo'].includes(m.tipo)).reduce((acc, curr) => acc + curr.monto, 0);
   const totalEgresos = movimientos.filter(m => ['egreso', 'cuota'].includes(m.tipo)).reduce((acc, curr) => acc + curr.monto, 0);
   const saldoCaja = totalIngresos - totalEgresos;
-
   const prestamosActivos = movimientos.filter(m => m.tipo === 'prestamo').map(prestamo => {
     const pagado = movimientos.filter(m => m.tipo === 'cuota' && m.prestamoId === prestamo.id).reduce((acc, curr) => acc + curr.monto, 0);
     return { ...prestamo, pagado: pagado, restante: prestamo.monto - pagado };
@@ -204,12 +249,8 @@ export default function AdminDashboard() {
     );
   }
 
-  // ==========================================
-  // RENDERIZADO (DASHBOARD)
-  // ==========================================
   return (
     <div className="flex h-screen bg-stone-50 font-sans text-stone-800 overflow-hidden">
-      
       {/* SIDEBAR */}
       <aside className="w-64 bg-stone-900 text-stone-300 flex flex-col shadow-xl z-20">
         <div className="p-6 border-b border-stone-800 bg-stone-950">
@@ -239,33 +280,72 @@ export default function AdminDashboard() {
           
           {/* MÓDULO: INVENTARIO */}
           {vistaActiva === 'inventario' && (
-            <div className="max-w-5xl mx-auto space-y-8">
+            <div className="max-w-7xl mx-auto space-y-8">
               <section className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
                 <h3 className="text-lg font-bold text-stone-800 mb-5 text-orange-600">Agregar Insumo o Producto</h3>
-                <form onSubmit={agregarProducto} className="flex flex-col md:flex-row gap-4">
-                  <input type="text" placeholder="Nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} className="flex-1 px-4 py-3 border border-stone-300 rounded-xl focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 placeholder-stone-500 font-medium outline-none" />
-                  <input type="number" placeholder="Precio" value={precio} onChange={(e) => setPrecio(e.target.value)} className="w-36 px-4 py-3 border border-stone-300 rounded-xl focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 placeholder-stone-500 font-medium outline-none" />
-                  <input type="number" placeholder="Stock" value={stock} onChange={(e) => setStock(e.target.value)} className="w-32 px-4 py-3 border border-stone-300 rounded-xl focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 placeholder-stone-500 font-medium outline-none" />
-                  <button type="submit" className="bg-stone-800 hover:bg-stone-900 text-white font-bold px-8 py-3 rounded-xl shadow-md">Guardar</button>
+                <form onSubmit={agregarProducto} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-bold text-stone-500 mb-1">Nombre *</label>
+                    <input type="text" value={nombre} onChange={(e) => setNombre(e.target.value)} className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-medium outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-stone-500 mb-1">Precio Normal *</label>
+                    <input type="number" value={precio} onChange={(e) => setPrecio(e.target.value)} className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-medium outline-none" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-stone-500 mb-1">Stock *</label>
+                    <input type="number" value={stock} onChange={(e) => setStock(e.target.value)} className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-medium outline-none" />
+                  </div>
+                  
+                  {/* SECCIÓN REGLAS DE OFERTA */}
+                  <div className="bg-orange-50 p-3 rounded-lg border border-orange-200 md:col-span-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-orange-700 mb-1">Tipo de Oferta</label>
+                      <select value={tipoOferta} onChange={(e) => setTipoOferta(e.target.value)} className="w-full px-4 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-bold outline-none cursor-pointer">
+                        <option value="mayor">Por Mayor (Ej: Sobre 6 a $1700 c/u)</option>
+                        <option value="pack">Por Pack (Ej: 3 por $1000)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-orange-700 mb-1">Cantidad para Activar</label>
+                      <input type="number" placeholder="Ej: 3 o 6" value={cantidadOferta} onChange={(e) => setCantidadOferta(e.target.value)} className="w-full px-4 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-medium outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-orange-700 mb-1">
+                        {tipoOferta === 'pack' ? 'Precio Total del Pack ($)' : 'Nuevo Precio Unitario ($)'}
+                      </label>
+                      <input type="number" placeholder={tipoOferta === 'pack' ? 'Ej: 1000' : 'Ej: 1700'} value={precioOferta} onChange={(e) => setPrecioOferta(e.target.value)} className="w-full px-4 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-medium outline-none" />
+                    </div>
+                  </div>
+                  
+                  <button type="submit" className="bg-stone-800 hover:bg-stone-900 text-white font-bold px-8 py-3 rounded-xl shadow-md h-[42px] flex items-center justify-center">Guardar</button>
                 </form>
               </section>
 
-              <section className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden">
-                <table className="w-full text-left">
+              <section className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden overflow-x-auto">
+                <table className="w-full text-left whitespace-nowrap">
                   <thead className="bg-stone-100 border-b border-stone-200 text-stone-600 text-sm uppercase font-bold tracking-wider">
-                    <tr><th className="px-6 py-5">Nombre</th><th className="px-6 py-5">Precio</th><th className="px-6 py-5">Stock</th><th className="px-6 py-5 text-right">Acciones</th></tr>
+                    <tr><th className="px-6 py-5">Nombre</th><th className="px-6 py-5">P. Normal</th><th className="px-6 py-5">Stock</th><th className="px-6 py-5 bg-orange-50">Regla de Oferta</th><th className="px-6 py-5 text-right">Acciones</th></tr>
                   </thead>
                   <tbody className="divide-y divide-stone-100">
                     {productos.map((producto) => (
                       <tr key={producto.id} className="hover:bg-amber-50/50">
                         {editandoId === producto.id ? (
                           <>
-                            <td className="px-6 py-4"><input type="text" value={editNombre} onChange={(e) => setEditNombre(e.target.value)} className="w-full px-3 py-2 border border-stone-400 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-medium outline-none" /></td>
-                            <td className="px-6 py-4"><input type="number" value={editPrecio} onChange={(e) => setEditPrecio(e.target.value)} className="w-28 px-3 py-2 border border-stone-400 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-medium outline-none" /></td>
-                            <td className="px-6 py-4"><input type="number" value={editStock} onChange={(e) => setEditStock(e.target.value)} className="w-24 px-3 py-2 border border-stone-400 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-medium outline-none" /></td>
-                            <td className="px-6 py-4 text-right flex justify-end gap-2">
-                              <button onClick={() => guardarEdicion(producto.id)} className="bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg">✔</button>
-                              <button onClick={cancelarEdicion} className="bg-stone-200 text-stone-700 font-bold px-4 py-2 rounded-lg">✖</button>
+                            <td className="px-4 py-3"><input type="text" value={editNombre} onChange={(e) => setEditNombre(e.target.value)} className="w-full px-2 py-1 border border-stone-400 rounded focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-medium outline-none" /></td>
+                            <td className="px-4 py-3"><input type="number" value={editPrecio} onChange={(e) => setEditPrecio(e.target.value)} className="w-24 px-2 py-1 border border-stone-400 rounded focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-medium outline-none" /></td>
+                            <td className="px-4 py-3"><input type="number" value={editStock} onChange={(e) => setEditStock(e.target.value)} className="w-20 px-2 py-1 border border-stone-400 rounded focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-medium outline-none" /></td>
+                            <td className="px-4 py-3 bg-orange-50 flex gap-2 items-center">
+                                <select value={editTipoOferta} onChange={(e) => setEditTipoOferta(e.target.value)} className="px-1 py-1 border border-orange-300 rounded outline-none text-xs">
+                                  <option value="mayor">Mayor</option>
+                                  <option value="pack">Pack</option>
+                                </select>
+                                <input type="number" placeholder="Cant." value={editCantidadOferta} onChange={(e) => setEditCantidadOferta(e.target.value)} className="w-14 px-1 py-1 border border-orange-300 rounded outline-none text-sm" />
+                                <input type="number" placeholder="$" value={editPrecioOferta} onChange={(e) => setEditPrecioOferta(e.target.value)} className="w-20 px-1 py-1 border border-orange-300 rounded outline-none text-sm" />
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <button onClick={() => guardarEdicion(producto.id)} className="bg-emerald-500 text-white font-bold px-3 py-1 rounded mr-2">✔</button>
+                              <button onClick={cancelarEdicion} className="bg-stone-200 text-stone-700 font-bold px-3 py-1 rounded">✖</button>
                             </td>
                           </>
                         ) : (
@@ -273,6 +353,17 @@ export default function AdminDashboard() {
                             <td className="px-6 py-5 font-medium">{producto.nombre}</td>
                             <td className="px-6 py-5 font-semibold">${producto.precio.toLocaleString("es-CL")}</td>
                             <td className="px-6 py-5"><span className={`px-3 py-1.5 rounded-full text-xs font-bold ${producto.stock <= 5 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-800'}`}>{producto.stock} uds</span></td>
+                            <td className="px-6 py-5 bg-orange-50/30">
+                                {producto.cantidadOferta > 0 ? (
+                                    <span className="text-xs font-bold text-orange-700">
+                                      {producto.tipoOferta === 'pack' 
+                                        ? `📦 Pack: ${producto.cantidadOferta}x por $${producto.precioOferta.toLocaleString("es-CL")}`
+                                        : `🏷️ Mayor: ${producto.cantidadOferta}+ a $${producto.precioOferta.toLocaleString("es-CL")} c/u`}
+                                    </span>
+                                ) : (
+                                    <span className="text-xs text-stone-400 italic">Sin oferta</span>
+                                )}
+                            </td>
                             <td className="px-6 py-5 text-right gap-3 flex justify-end">
                               <button onClick={() => iniciarEdicion(producto)} className="text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg font-bold">Editar</button>
                               <button onClick={() => eliminarProducto(producto.id)} className="text-red-500 bg-red-50 px-3 py-1.5 rounded-lg font-bold">Borrar</button>
@@ -289,35 +380,36 @@ export default function AdminDashboard() {
 
           {/* MÓDULO: PEDIDOS */}
           {vistaActiva === 'pedidos' && (
-             <div className="max-w-6xl mx-auto flex flex-col lg:flex-row gap-8">
+             <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-8">
                
-               {/* Catálogo */}
+               {/* Catálogo Visual */}
                <div className="flex-1 bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
                  <h3 className="text-lg font-bold text-stone-800 mb-4 border-b pb-2">Seleccionar Productos</h3>
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                    {productos.map(prod => (
                      <div key={prod.id} className="border border-stone-200 p-4 rounded-xl hover:border-orange-500 flex flex-col justify-between bg-stone-50 transition-colors">
                        <div>
                          <h4 className="font-bold text-stone-800">{prod.nombre}</h4>
-                         <p className="text-orange-600 font-black">${prod.precio.toLocaleString("es-CL")}</p>
+                         <p className="text-orange-600 font-black text-lg">${prod.precio.toLocaleString("es-CL")}</p>
+                         {prod.cantidadOferta > 0 && (
+                            <p className="text-xs font-bold text-orange-700 mt-1 bg-orange-100 inline-block px-2 py-0.5 rounded border border-orange-200">
+                                {prod.tipoOferta === 'pack' 
+                                  ? `📦 Llevas ${prod.cantidadOferta} por $${prod.precioOferta.toLocaleString("es-CL")}`
+                                  : `🔥 Llevas ${prod.cantidadOferta}+ a $${prod.precioOferta.toLocaleString("es-CL")} c/u`}
+                            </p>
+                         )}
                        </div>
                        <div className="mt-4 flex justify-between items-center">
                          <span className="text-xs font-bold text-stone-500">Stock: {prod.stock}</span>
-                         <button 
-                           onClick={() => agregarAlCarrito(prod)} 
-                           disabled={prod.stock <= 0} 
-                           className={`px-4 py-2 rounded-lg font-bold text-sm ${prod.stock > 0 ? 'bg-stone-800 hover:bg-stone-900 text-white' : 'bg-stone-200 text-stone-400 cursor-not-allowed'}`}
-                         >
-                           + Agregar
-                         </button>
+                         <button onClick={() => agregarAlCarrito(prod)} disabled={prod.stock <= 0} className={`px-4 py-2 rounded-lg font-bold text-sm ${prod.stock > 0 ? 'bg-stone-800 hover:bg-stone-900 text-white' : 'bg-stone-200 text-stone-400 cursor-not-allowed'}`}>+ Agregar</button>
                        </div>
                      </div>
                    ))}
                  </div>
                </div>
 
-               {/* Carrito con Control de Cantidades y Ofertas */}
-               <div className="w-full lg:w-96 bg-white p-6 rounded-2xl shadow-sm border border-stone-200 flex flex-col h-fit">
+               {/* Carrito */}
+               <div className="w-full lg:w-[450px] bg-white p-6 rounded-2xl shadow-sm border border-stone-200 flex flex-col h-fit">
                  <h3 className="text-lg font-bold text-stone-800 mb-4 border-b pb-2">Venta Nueva</h3>
                  
                  <div className="mb-4 space-y-3">
@@ -325,60 +417,57 @@ export default function AdminDashboard() {
                    <input type="text" placeholder="RUT (Opcional)" value={rutCliente} onChange={(e) => setRutCliente(e.target.value)} className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 placeholder-stone-500 font-medium outline-none text-sm" />
                  </div>
 
-                 {/* Lista de Items Editables */}
-                 <div className="flex-1 overflow-y-auto mb-4 min-h-[150px] border-b border-stone-100 pb-2">
+                 <div className="flex-1 overflow-y-auto mb-4 min-h-[200px] border-b border-stone-100 pb-2">
                    {carrito.length === 0 ? (
                      <p className="text-stone-400 text-sm text-center mt-10 italic">Añade productos para comenzar</p>
                    ) : (
                      <ul className="space-y-4">
-                       {carrito.map((item) => (
-                         <li key={item.id} className="flex flex-col gap-2 p-3 bg-stone-50 rounded-lg border border-stone-200">
-                           <div className="flex justify-between items-start">
-                             <p className="font-bold text-stone-800 text-sm leading-tight">{item.nombre}</p>
-                             <button onClick={() => removerDelCarrito(item.id)} className="text-red-500 hover:bg-red-100 px-2 rounded font-bold">✖</button>
-                           </div>
-                           
-                           <div className="flex justify-between items-center">
-                             {/* Botones de control de cantidad */}
-                             <div className="flex items-center gap-1 bg-white border border-stone-300 rounded">
-                               <button onClick={() => actualizarCantidadCarrito(item.id, String(item.cantidad - 1))} className="px-2 py-1 text-stone-600 hover:bg-stone-100 font-bold">-</button>
-                               <input 
-                                 type="number" 
-                                 value={item.cantidad} 
-                                 onChange={(e) => actualizarCantidadCarrito(item.id, e.target.value)} 
-                                 className="w-10 text-center py-1 bg-transparent font-bold text-sm outline-none text-stone-800"
-                               />
-                               <button onClick={() => actualizarCantidadCarrito(item.id, String(item.cantidad + 1))} className="px-2 py-1 text-stone-600 hover:bg-stone-100 font-bold">+</button>
+                       {carrito.map((item) => {
+                         const subtotalCalculado = calcularSubtotalItem(item, item.cantidad);
+                         const enOferta = item.cantidadOferta > 0 && item.cantidad >= item.cantidadOferta;
+
+                         return (
+                           <li key={item.id} className={`flex flex-col gap-2 p-3 rounded-lg border ${enOferta ? 'bg-orange-50 border-orange-300 shadow-sm' : 'bg-stone-50 border-stone-200'}`}>
+                             <div className="flex justify-between items-start">
+                               <p className="font-bold text-stone-800 text-sm leading-tight flex-1">
+                                 {item.nombre} 
+                                 {enOferta && <span className="ml-2 text-[10px] bg-orange-600 text-white px-1.5 py-0.5 rounded uppercase font-bold tracking-wide">Descuento</span>}
+                               </p>
+                               <button onClick={() => removerDelCarrito(item.id)} className="text-red-500 hover:bg-red-100 px-2 rounded font-bold ml-2">✖</button>
                              </div>
                              
-                             <span className="font-bold text-stone-800">${(item.precio * item.cantidad).toLocaleString("es-CL")}</span>
-                           </div>
-                         </li>
-                       ))}
+                             <div className="flex justify-between items-center">
+                               <div className="flex items-center gap-1 bg-white border border-stone-300 rounded">
+                                 <button onClick={() => actualizarCantidadCarrito(item.id, String(item.cantidad - 1))} className="px-2 py-1 text-stone-600 hover:bg-stone-100 font-bold">-</button>
+                                 <input type="number" value={item.cantidad} onChange={(e) => actualizarCantidadCarrito(item.id, e.target.value)} className="w-10 text-center py-1 bg-transparent font-bold text-sm outline-none text-stone-800" />
+                                 <button onClick={() => actualizarCantidadCarrito(item.id, String(item.cantidad + 1))} className="px-2 py-1 text-stone-600 hover:bg-stone-100 font-bold">+</button>
+                               </div>
+                               
+                               <div className="text-right">
+                                 {enOferta && <p className="text-xs text-stone-400 line-through">${(item.precio * item.cantidad).toLocaleString("es-CL")}</p>}
+                                 <span className={`font-black ${enOferta ? 'text-orange-700 text-lg' : 'text-stone-800'}`}>${subtotalCalculado.toLocaleString("es-CL")}</span>
+                               </div>
+                             </div>
+                           </li>
+                         );
+                       })}
                      </ul>
                    )}
                  </div>
 
-                 {/* Sección de Totales y Ofertas */}
                  <div className="pt-2">
                    <div className="flex justify-between items-center mb-2">
-                     <span className="text-sm font-bold text-stone-500">Subtotal:</span>
+                     <span className="text-sm font-bold text-stone-500">Subtotal con reglas aplicadas:</span>
                      <span className="text-sm font-bold text-stone-800">${subtotalPedido.toLocaleString("es-CL")}</span>
                    </div>
                    
                    <div className="flex justify-between items-center mb-4">
-                     <span className="text-sm font-bold text-orange-600">Oferta / Descuento ($):</span>
-                     <input 
-                       type="number" 
-                       placeholder="0" 
-                       value={descuentoPedido} 
-                       onChange={(e) => setDescuentoPedido(e.target.value)} 
-                       className="w-24 px-2 py-1 border border-orange-300 rounded focus:ring-2 focus:ring-orange-500 bg-orange-50 text-orange-800 font-bold outline-none text-right" 
-                     />
+                     <span className="text-sm font-bold text-orange-600">Añadir Descuento Global ($):</span>
+                     <input type="number" placeholder="0" value={descuentoGlobal} onChange={(e) => setDescuentoGlobal(e.target.value)} className="w-24 px-2 py-1 border border-orange-300 rounded focus:ring-2 focus:ring-orange-500 bg-orange-50 text-orange-800 font-bold outline-none text-right" />
                    </div>
 
                    <div className="flex justify-between items-center mb-6 pt-3 border-t border-stone-200">
-                     <span className="text-lg font-bold text-stone-800">Total:</span>
+                     <span className="text-lg font-bold text-stone-800">Total Final:</span>
                      <span className="text-3xl font-black text-orange-600">${totalPedido.toLocaleString("es-CL")}</span>
                    </div>
 
