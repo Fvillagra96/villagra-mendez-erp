@@ -16,7 +16,7 @@ export default function AdminDashboard() {
   const [nombre, setNombre] = useState("");
   const [precio, setPrecio] = useState("");
   const [stock, setStock] = useState("");
-  const [tipoOferta, setTipoOferta] = useState("ninguna"); // Por defecto SIN OFERTA
+  const [tipoOferta, setTipoOferta] = useState("ninguna"); 
   const [cantidadOferta, setCantidadOferta] = useState(""); 
   const [precioOferta, setPrecioOferta] = useState("");     
   
@@ -170,7 +170,6 @@ export default function AdminDashboard() {
 
     try {
       const fechaActual = new Date().toISOString();
-      
       const itemsProcesados = carrito.map(item => ({
         ...item,
         subtotalAplicado: calcularSubtotalItem(item, item.cantidad)
@@ -231,6 +230,9 @@ export default function AdminDashboard() {
     return { ...prestamo, pagado: pagado, restante: prestamo.monto - pagado };
   }).filter(p => p.restante > 0); 
   const deudaTotalAcumulada = prestamosActivos.reduce((acc, curr) => acc + curr.restante, 0);
+  
+  // NUEVO CÁLCULO DE DINERO REAL
+  const saldoRealDisponible = saldoCaja - deudaTotalAcumulada;
 
   // ==========================================
   // RENDERIZADO (LOGIN)
@@ -256,13 +258,7 @@ export default function AdminDashboard() {
       {/* SIDEBAR */}
       <aside className="w-64 bg-stone-900 text-stone-300 flex flex-col shadow-xl z-20">
         <div className="p-6 border-b border-stone-800 bg-stone-950">
-          <h1 className="text-3xl font-black tracking-tight text-white flex items-center gap-2">
-        <img 
-          src="https://firebasestorage.googleapis.com/v0/b/villagra-mendez-erp.firebasestorage.app/o/Logo%20vill%26men.png?alt=media&token=94e05925-7ced-44f5-bb42-263f4d35b860" 
-          alt="Logo V&M" 
-          className="h-30 w-auto object-contain" 
-        />
-      </h1>
+          <h1 className="text-2xl font-black text-white flex items-center gap-2"><span className="text-orange-500">V&M</span></h1>
           <p className="text-xs text-stone-400 mt-1 uppercase tracking-widest font-semibold">Panel de Control</p>
         </div>
         <nav className="flex-1 p-4 space-y-3">
@@ -305,7 +301,6 @@ export default function AdminDashboard() {
                     <input type="number" value={stock} onChange={(e) => setStock(e.target.value)} className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-medium outline-none" />
                   </div>
                   
-                  {/* SECCIÓN REGLAS DE OFERTA CON OCULTAMIENTO */}
                   <div className={`${tipoOferta !== 'ninguna' ? 'bg-orange-50 border-orange-200' : 'bg-stone-50 border-stone-200'} p-3 rounded-lg border md:col-span-4 grid grid-cols-1 md:grid-cols-3 gap-4 transition-colors`}>
                     <div>
                       <label className={`block text-xs font-bold mb-1 ${tipoOferta !== 'ninguna' ? 'text-orange-700' : 'text-stone-500'}`}>Tipo de Oferta</label>
@@ -315,8 +310,6 @@ export default function AdminDashboard() {
                         <option value="pack">Por Pack (Ej: 3 por $1000)</option>
                       </select>
                     </div>
-                    
-                    {/* Solo mostramos los campos de monto si la oferta NO es "ninguna" */}
                     {tipoOferta !== 'ninguna' && (
                       <>
                         <div>
@@ -324,15 +317,12 @@ export default function AdminDashboard() {
                           <input type="number" placeholder="Ej: 3 o 6" value={cantidadOferta} onChange={(e) => setCantidadOferta(e.target.value)} className="w-full px-4 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-medium outline-none" />
                         </div>
                         <div>
-                          <label className="block text-xs font-bold text-orange-700 mb-1">
-                            {tipoOferta === 'pack' ? 'Precio Total del Pack ($)' : 'Nuevo Precio Unitario ($)'}
-                          </label>
+                          <label className="block text-xs font-bold text-orange-700 mb-1">{tipoOferta === 'pack' ? 'Precio Total del Pack ($)' : 'Nuevo Precio Unitario ($)'}</label>
                           <input type="number" placeholder={tipoOferta === 'pack' ? 'Ej: 1000' : 'Ej: 1700'} value={precioOferta} onChange={(e) => setPrecioOferta(e.target.value)} className="w-full px-4 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-medium outline-none" />
                         </div>
                       </>
                     )}
                   </div>
-                  
                   <button type="submit" className="bg-stone-800 hover:bg-stone-900 text-white font-bold px-8 py-3 rounded-xl shadow-md h-[42px] flex items-center justify-center">Guardar</button>
                 </form>
               </section>
@@ -402,7 +392,6 @@ export default function AdminDashboard() {
           {vistaActiva === 'pedidos' && (
              <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-8">
                
-               {/* Catálogo Visual */}
                <div className="flex-1 bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
                  <h3 className="text-lg font-bold text-stone-800 mb-4 border-b pb-2">Seleccionar Productos</h3>
                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -428,7 +417,6 @@ export default function AdminDashboard() {
                  </div>
                </div>
 
-               {/* Carrito */}
                <div className="w-full lg:w-[450px] bg-white p-6 rounded-2xl shadow-sm border border-stone-200 flex flex-col h-fit">
                  <h3 className="text-lg font-bold text-stone-800 mb-4 border-b pb-2">Venta Nueva</h3>
                  
@@ -502,18 +490,28 @@ export default function AdminDashboard() {
           {/* MÓDULO: FINANZAS */}
           {vistaActiva === 'finanzas' && (
             <div className="max-w-6xl mx-auto space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className={`p-6 rounded-2xl shadow-sm border ${saldoCaja >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
-                  <h4 className="text-sm font-bold text-stone-500 uppercase tracking-wide">Saldo Neto en Caja</h4>
-                  <p className={`text-4xl font-black mt-2 ${saldoCaja >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>${saldoCaja.toLocaleString("es-CL")}</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* TARJETA PRINCIPAL: DINERO REAL DISPONIBLE */}
+                <div className={`p-8 rounded-2xl shadow-lg border-2 flex flex-col justify-center ${saldoRealDisponible >= 0 ? 'bg-emerald-50 border-emerald-500' : 'bg-red-50 border-red-500'}`}>
+                  <h4 className="text-sm font-bold text-emerald-800 uppercase tracking-widest">Dinero Disponible Real</h4>
+                  <p className={`text-5xl font-black mt-2 ${saldoRealDisponible >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                    ${saldoRealDisponible.toLocaleString("es-CL")}
+                  </p>
+                  <p className="text-xs text-emerald-600 mt-2 font-bold">
+                    * Dinero en caja (${saldoCaja.toLocaleString("es-CL")}) menos Deuda Total (${deudaTotalAcumulada.toLocaleString("es-CL")})
+                  </p>
                 </div>
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
-                  <h4 className="text-sm font-bold text-stone-500 uppercase tracking-wide">Egresos Registrados</h4>
-                  <p className="text-3xl font-black mt-2 text-stone-700">${totalEgresos.toLocaleString("es-CL")}</p>
-                </div>
-                <div className="bg-orange-50 p-6 rounded-2xl shadow-sm border border-orange-200">
-                  <h4 className="text-sm font-bold text-stone-500 uppercase tracking-wide">Deuda Préstamos Activos</h4>
-                  <p className="text-3xl font-black mt-2 text-orange-700">${deudaTotalAcumulada.toLocaleString("es-CL")}</p>
+                
+                {/* TARJETAS SECUNDARIAS */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200 flex flex-col justify-center">
+                    <h4 className="text-xs font-bold text-stone-500 uppercase tracking-wide">Egresos Registrados</h4>
+                    <p className="text-2xl font-black mt-1 text-stone-700">${totalEgresos.toLocaleString("es-CL")}</p>
+                  </div>
+                  <div className="bg-orange-50 p-6 rounded-2xl shadow-sm border border-orange-200 flex flex-col justify-center">
+                    <h4 className="text-xs font-bold text-stone-500 uppercase tracking-wide">Deuda Préstamos Activos</h4>
+                    <p className="text-2xl font-black mt-1 text-orange-700">${deudaTotalAcumulada.toLocaleString("es-CL")}</p>
+                  </div>
                 </div>
               </div>
 

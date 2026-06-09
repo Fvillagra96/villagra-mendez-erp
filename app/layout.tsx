@@ -12,6 +12,7 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+//titulo pagina
 export const metadata: Metadata = {
   title: "Villagra y Méndez",
   description: "",
