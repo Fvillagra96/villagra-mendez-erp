@@ -256,7 +256,13 @@ export default function AdminDashboard() {
       {/* SIDEBAR */}
       <aside className="w-64 bg-stone-900 text-stone-300 flex flex-col shadow-xl z-20">
         <div className="p-6 border-b border-stone-800 bg-stone-950">
-          <h1 className="text-2xl font-black text-white flex items-center gap-2"><span className="text-orange-500">V&M</span></h1>
+          <h1 className="text-3xl font-black tracking-tight text-white flex items-center gap-2">
+        <img 
+          src="https://firebasestorage.googleapis.com/v0/b/villagra-mendez-erp.firebasestorage.app/o/Logo%20vill%26men.png?alt=media&token=94e05925-7ced-44f5-bb42-263f4d35b860" 
+          alt="Logo V&M" 
+          className="h-30 w-auto object-contain" 
+        />
+      </h1>
           <p className="text-xs text-stone-400 mt-1 uppercase tracking-widest font-semibold">Panel de Control</p>
         </div>
         <nav className="flex-1 p-4 space-y-3">

@@ -33,13 +33,9 @@ export default function TiendaPublica() {
         <img 
           src="https://firebasestorage.googleapis.com/v0/b/villagra-mendez-erp.firebasestorage.app/o/Logo%20vill%26men.png?alt=media&token=94e05925-7ced-44f5-bb42-263f4d35b860" 
           alt="Logo V&M" 
-          className="h-10 w-auto object-contain" 
+          className="h-30 w-auto object-contain" 
         />
-        <span className="text-orange-500">V&M</span>
       </h1>
-      <p className="text-sm text-stone-400 mt-1 uppercase tracking-widest font-semibold">
-        Productos Artesanales
-      </p>
     </div>
     <nav>
       <Link href="/admin" className="text-stone-400 hover:text-white transition-colors text-sm font-medium flex items-center gap-2">
