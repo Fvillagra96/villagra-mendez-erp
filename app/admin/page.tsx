@@ -46,7 +46,7 @@ export default function AdminDashboard() {
     });
     const unsubscribeFinanzas = onSnapshot(collection(db, "finanzas"), (snapshot) => {
       const lista = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      lista.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+      lista.sort((a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
       setMovimientos(lista);
     });
     return () => { unsubscribeProd(); unsubscribeFinanzas(); };
