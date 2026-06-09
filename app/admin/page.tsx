@@ -16,7 +16,7 @@ export default function AdminDashboard() {
   const [nombre, setNombre] = useState("");
   const [precio, setPrecio] = useState("");
   const [stock, setStock] = useState("");
-  const [tipoOferta, setTipoOferta] = useState("mayor"); // 'mayor' o 'pack'
+  const [tipoOferta, setTipoOferta] = useState("ninguna"); // Por defecto SIN OFERTA
   const [cantidadOferta, setCantidadOferta] = useState(""); 
   const [precioOferta, setPrecioOferta] = useState("");     
   
@@ -24,7 +24,7 @@ export default function AdminDashboard() {
   const [editNombre, setEditNombre] = useState("");
   const [editPrecio, setEditPrecio] = useState("");
   const [editStock, setEditStock] = useState("");
-  const [editTipoOferta, setEditTipoOferta] = useState("mayor");
+  const [editTipoOferta, setEditTipoOferta] = useState("ninguna");
   const [editCantidadOferta, setEditCantidadOferta] = useState(""); 
   const [editPrecioOferta, setEditPrecioOferta] = useState("");     
 
@@ -78,16 +78,19 @@ export default function AdminDashboard() {
   const agregarProducto = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nombre || !precio || !stock) return alert("⚠️ Llena Nombre, Precio Normal y Stock.");
+    
+    const tieneOferta = tipoOferta !== "ninguna";
+    
     try {
       await addDoc(collection(db, "productos"), { 
         nombre, 
         precio: Number(precio), 
         stock: Number(stock),
         tipoOferta: tipoOferta,
-        cantidadOferta: Number(cantidadOferta) || 0,
-        precioOferta: Number(precioOferta) || 0
+        cantidadOferta: tieneOferta ? (Number(cantidadOferta) || 0) : 0,
+        precioOferta: tieneOferta ? (Number(precioOferta) || 0) : 0
       });
-      setNombre(""); setPrecio(""); setStock(""); setCantidadOferta(""); setPrecioOferta(""); setTipoOferta("mayor");
+      setNombre(""); setPrecio(""); setStock(""); setCantidadOferta(""); setPrecioOferta(""); setTipoOferta("ninguna");
     } catch (error) { alert("❌ Error al guardar producto."); }
   };
   
@@ -95,36 +98,36 @@ export default function AdminDashboard() {
   
   const iniciarEdicion = (prod: any) => { 
     setEditandoId(prod.id); setEditNombre(prod.nombre); setEditPrecio(prod.precio); setEditStock(prod.stock);
-    setEditTipoOferta(prod.tipoOferta || "mayor"); setEditCantidadOferta(prod.cantidadOferta || ""); setEditPrecioOferta(prod.precioOferta || "");
+    setEditTipoOferta(prod.tipoOferta || "ninguna"); setEditCantidadOferta(prod.cantidadOferta || ""); setEditPrecioOferta(prod.precioOferta || "");
   };
   
   const cancelarEdicion = () => setEditandoId(null);
   
   const guardarEdicion = async (id: string) => {
     if (!editNombre || !editPrecio || !editStock) return alert("⚠️ Campos requeridos vacíos.");
+    const tieneOferta = editTipoOferta !== "ninguna";
+    
     try {
       await updateDoc(doc(db, "productos", id), { 
         nombre: editNombre, 
         precio: Number(editPrecio), 
         stock: Number(editStock),
         tipoOferta: editTipoOferta,
-        cantidadOferta: Number(editCantidadOferta) || 0,
-        precioOferta: Number(editPrecioOferta) || 0
+        cantidadOferta: tieneOferta ? (Number(editCantidadOferta) || 0) : 0,
+        precioOferta: tieneOferta ? (Number(editPrecioOferta) || 0) : 0
       });
       setEditandoId(null);
     } catch (error) { alert("❌ Error al actualizar."); }
   };
 
-  // --- LÓGICA PEDIDOS (NUEVA MATEMÁTICA DE OFERTAS) ---
+  // --- LÓGICA PEDIDOS ---
   const calcularSubtotalItem = (item: any, cantidadSeleccionada: number) => {
-    if (item.cantidadOferta > 0 && cantidadSeleccionada >= item.cantidadOferta) {
+    if (item.tipoOferta !== 'ninguna' && item.cantidadOferta > 0 && cantidadSeleccionada >= item.cantidadOferta) {
       if (item.tipoOferta === 'pack') {
-        // Ejemplo: 3 por 1000. Si lleva 4 -> (1 pack * 1000) + (1 suelto * 400)
         const packs = Math.floor(cantidadSeleccionada / item.cantidadOferta);
         const sueltos = cantidadSeleccionada % item.cantidadOferta;
         return (packs * item.precioOferta) + (sueltos * item.precio);
-      } else {
-        // Ejemplo: Mayor a 6 a 1700 c/u. Si lleva 7 -> 7 * 1700
+      } else if (item.tipoOferta === 'mayor') {
         return cantidadSeleccionada * item.precioOferta;
       }
     }
@@ -157,7 +160,6 @@ export default function AdminDashboard() {
 
   const removerDelCarrito = (id: string) => setCarrito(carrito.filter(item => item.id !== id));
   
-  // CÁLCULOS DEL PEDIDO
   const subtotalPedido = carrito.reduce((total, item) => total + calcularSubtotalItem(item, item.cantidad), 0);
   const descuentoAplicado = Number(descuentoGlobal) || 0;
   const totalPedido = Math.max(0, subtotalPedido - descuentoAplicado); 
@@ -297,25 +299,32 @@ export default function AdminDashboard() {
                     <input type="number" value={stock} onChange={(e) => setStock(e.target.value)} className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-medium outline-none" />
                   </div>
                   
-                  {/* SECCIÓN REGLAS DE OFERTA */}
-                  <div className="bg-orange-50 p-3 rounded-lg border border-orange-200 md:col-span-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* SECCIÓN REGLAS DE OFERTA CON OCULTAMIENTO */}
+                  <div className={`${tipoOferta !== 'ninguna' ? 'bg-orange-50 border-orange-200' : 'bg-stone-50 border-stone-200'} p-3 rounded-lg border md:col-span-4 grid grid-cols-1 md:grid-cols-3 gap-4 transition-colors`}>
                     <div>
-                      <label className="block text-xs font-bold text-orange-700 mb-1">Tipo de Oferta</label>
-                      <select value={tipoOferta} onChange={(e) => setTipoOferta(e.target.value)} className="w-full px-4 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-bold outline-none cursor-pointer">
+                      <label className={`block text-xs font-bold mb-1 ${tipoOferta !== 'ninguna' ? 'text-orange-700' : 'text-stone-500'}`}>Tipo de Oferta</label>
+                      <select value={tipoOferta} onChange={(e) => setTipoOferta(e.target.value)} className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-orange-500 bg-white font-bold outline-none cursor-pointer ${tipoOferta !== 'ninguna' ? 'border-orange-300 text-stone-900' : 'border-stone-300 text-stone-600'}`}>
+                        <option value="ninguna">❌ Sin Oferta (Precio Normal)</option>
                         <option value="mayor">Por Mayor (Ej: Sobre 6 a $1700 c/u)</option>
                         <option value="pack">Por Pack (Ej: 3 por $1000)</option>
                       </select>
                     </div>
-                    <div>
-                      <label className="block text-xs font-bold text-orange-700 mb-1">Cantidad para Activar</label>
-                      <input type="number" placeholder="Ej: 3 o 6" value={cantidadOferta} onChange={(e) => setCantidadOferta(e.target.value)} className="w-full px-4 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-medium outline-none" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-orange-700 mb-1">
-                        {tipoOferta === 'pack' ? 'Precio Total del Pack ($)' : 'Nuevo Precio Unitario ($)'}
-                      </label>
-                      <input type="number" placeholder={tipoOferta === 'pack' ? 'Ej: 1000' : 'Ej: 1700'} value={precioOferta} onChange={(e) => setPrecioOferta(e.target.value)} className="w-full px-4 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-medium outline-none" />
-                    </div>
+                    
+                    {/* Solo mostramos los campos de monto si la oferta NO es "ninguna" */}
+                    {tipoOferta !== 'ninguna' && (
+                      <>
+                        <div>
+                          <label className="block text-xs font-bold text-orange-700 mb-1">Cantidad para Activar</label>
+                          <input type="number" placeholder="Ej: 3 o 6" value={cantidadOferta} onChange={(e) => setCantidadOferta(e.target.value)} className="w-full px-4 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-medium outline-none" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-orange-700 mb-1">
+                            {tipoOferta === 'pack' ? 'Precio Total del Pack ($)' : 'Nuevo Precio Unitario ($)'}
+                          </label>
+                          <input type="number" placeholder={tipoOferta === 'pack' ? 'Ej: 1000' : 'Ej: 1700'} value={precioOferta} onChange={(e) => setPrecioOferta(e.target.value)} className="w-full px-4 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-medium outline-none" />
+                        </div>
+                      </>
+                    )}
                   </div>
                   
                   <button type="submit" className="bg-stone-800 hover:bg-stone-900 text-white font-bold px-8 py-3 rounded-xl shadow-md h-[42px] flex items-center justify-center">Guardar</button>
@@ -335,13 +344,18 @@ export default function AdminDashboard() {
                             <td className="px-4 py-3"><input type="text" value={editNombre} onChange={(e) => setEditNombre(e.target.value)} className="w-full px-2 py-1 border border-stone-400 rounded focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-medium outline-none" /></td>
                             <td className="px-4 py-3"><input type="number" value={editPrecio} onChange={(e) => setEditPrecio(e.target.value)} className="w-24 px-2 py-1 border border-stone-400 rounded focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-medium outline-none" /></td>
                             <td className="px-4 py-3"><input type="number" value={editStock} onChange={(e) => setEditStock(e.target.value)} className="w-20 px-2 py-1 border border-stone-400 rounded focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-medium outline-none" /></td>
-                            <td className="px-4 py-3 bg-orange-50 flex gap-2 items-center">
-                                <select value={editTipoOferta} onChange={(e) => setEditTipoOferta(e.target.value)} className="px-1 py-1 border border-orange-300 rounded outline-none text-xs">
+                            <td className={`px-4 py-3 flex gap-2 items-center ${editTipoOferta !== 'ninguna' ? 'bg-orange-50' : ''}`}>
+                                <select value={editTipoOferta} onChange={(e) => setEditTipoOferta(e.target.value)} className={`px-1 py-1 border rounded outline-none text-xs font-bold ${editTipoOferta !== 'ninguna' ? 'border-orange-300' : 'border-stone-300 text-stone-500'}`}>
+                                  <option value="ninguna">Sin Oferta</option>
                                   <option value="mayor">Mayor</option>
                                   <option value="pack">Pack</option>
                                 </select>
-                                <input type="number" placeholder="Cant." value={editCantidadOferta} onChange={(e) => setEditCantidadOferta(e.target.value)} className="w-14 px-1 py-1 border border-orange-300 rounded outline-none text-sm" />
-                                <input type="number" placeholder="$" value={editPrecioOferta} onChange={(e) => setEditPrecioOferta(e.target.value)} className="w-20 px-1 py-1 border border-orange-300 rounded outline-none text-sm" />
+                                {editTipoOferta !== 'ninguna' && (
+                                  <>
+                                    <input type="number" placeholder="Cant." value={editCantidadOferta} onChange={(e) => setEditCantidadOferta(e.target.value)} className="w-14 px-1 py-1 border border-orange-300 rounded outline-none text-sm" />
+                                    <input type="number" placeholder="$" value={editPrecioOferta} onChange={(e) => setEditPrecioOferta(e.target.value)} className="w-20 px-1 py-1 border border-orange-300 rounded outline-none text-sm" />
+                                  </>
+                                )}
                             </td>
                             <td className="px-4 py-3 text-right">
                               <button onClick={() => guardarEdicion(producto.id)} className="bg-emerald-500 text-white font-bold px-3 py-1 rounded mr-2">✔</button>
@@ -353,15 +367,15 @@ export default function AdminDashboard() {
                             <td className="px-6 py-5 font-medium">{producto.nombre}</td>
                             <td className="px-6 py-5 font-semibold">${producto.precio.toLocaleString("es-CL")}</td>
                             <td className="px-6 py-5"><span className={`px-3 py-1.5 rounded-full text-xs font-bold ${producto.stock <= 5 ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-800'}`}>{producto.stock} uds</span></td>
-                            <td className="px-6 py-5 bg-orange-50/30">
-                                {producto.cantidadOferta > 0 ? (
+                            <td className={`px-6 py-5 ${producto.tipoOferta !== 'ninguna' && producto.cantidadOferta > 0 ? 'bg-orange-50/30' : ''}`}>
+                                {producto.tipoOferta !== 'ninguna' && producto.cantidadOferta > 0 ? (
                                     <span className="text-xs font-bold text-orange-700">
                                       {producto.tipoOferta === 'pack' 
                                         ? `📦 Pack: ${producto.cantidadOferta}x por $${producto.precioOferta.toLocaleString("es-CL")}`
                                         : `🏷️ Mayor: ${producto.cantidadOferta}+ a $${producto.precioOferta.toLocaleString("es-CL")} c/u`}
                                     </span>
                                 ) : (
-                                    <span className="text-xs text-stone-400 italic">Sin oferta</span>
+                                    <span className="text-xs font-bold text-stone-400">Sin oferta</span>
                                 )}
                             </td>
                             <td className="px-6 py-5 text-right gap-3 flex justify-end">
@@ -391,7 +405,7 @@ export default function AdminDashboard() {
                        <div>
                          <h4 className="font-bold text-stone-800">{prod.nombre}</h4>
                          <p className="text-orange-600 font-black text-lg">${prod.precio.toLocaleString("es-CL")}</p>
-                         {prod.cantidadOferta > 0 && (
+                         {prod.tipoOferta !== 'ninguna' && prod.cantidadOferta > 0 && (
                             <p className="text-xs font-bold text-orange-700 mt-1 bg-orange-100 inline-block px-2 py-0.5 rounded border border-orange-200">
                                 {prod.tipoOferta === 'pack' 
                                   ? `📦 Llevas ${prod.cantidadOferta} por $${prod.precioOferta.toLocaleString("es-CL")}`
@@ -424,7 +438,7 @@ export default function AdminDashboard() {
                      <ul className="space-y-4">
                        {carrito.map((item) => {
                          const subtotalCalculado = calcularSubtotalItem(item, item.cantidad);
-                         const enOferta = item.cantidadOferta > 0 && item.cantidad >= item.cantidadOferta;
+                         const enOferta = item.tipoOferta !== 'ninguna' && item.cantidadOferta > 0 && item.cantidad >= item.cantidadOferta;
 
                          return (
                            <li key={item.id} className={`flex flex-col gap-2 p-3 rounded-lg border ${enOferta ? 'bg-orange-50 border-orange-300 shadow-sm' : 'bg-stone-50 border-stone-200'}`}>
