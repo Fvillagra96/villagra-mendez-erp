@@ -25,21 +25,29 @@ export default function TiendaPublica() {
     <div className="min-h-screen bg-stone-50 font-sans text-stone-800">
       
       {/* Cabecera Pública */}
-      <header className="bg-stone-900 text-stone-50 py-6 px-8 shadow-md">
-        <div className="max-w-6xl mx-auto flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-black tracking-tight text-white flex items-center gap-2">
-              <span className="text-orange-500">V&M</span>
-            </h1>
-            <p className="text-sm text-stone-400 mt-1 uppercase tracking-widest font-semibold">Productos Artesanales</p>
-          </div>
-          <nav>
-            <Link href="/admin" className="text-stone-400 hover:text-white transition-colors text-sm font-medium flex items-center gap-2">
-              <span>🔒</span> Acceso Admin
-            </Link>
-          </nav>
-        </div>
-      </header>
+     <header className="bg-stone-900 text-stone-50 py-6 px-8 shadow-md">
+  <div className="max-w-6xl mx-auto flex justify-between items-center">
+    <div>
+      {/* Aquí insertamos el logo */}
+      <h1 className="text-3xl font-black tracking-tight text-white flex items-center gap-2">
+        <img 
+          src="https://firebasestorage.googleapis.com/v0/b/villagra-mendez-erp.firebasestorage.app/o/Logo%20vill%26men.png?alt=media&token=94e05925-7ced-44f5-bb42-263f4d35b860" 
+          alt="Logo V&M" 
+          className="h-10 w-auto object-contain" 
+        />
+        <span className="text-orange-500">V&M</span>
+      </h1>
+      <p className="text-sm text-stone-400 mt-1 uppercase tracking-widest font-semibold">
+        Productos Artesanales
+      </p>
+    </div>
+    <nav>
+      <Link href="/admin" className="text-stone-400 hover:text-white transition-colors text-sm font-medium flex items-center gap-2">
+        <span>🔒</span> Acceso Admin
+      </Link>
+    </nav>
+  </div>
+</header>
 
       {/* Banner Principal */}
       <section className="bg-orange-600 text-white py-16 px-8 text-center shadow-inner">
