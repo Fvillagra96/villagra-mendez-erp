@@ -1,65 +1,171 @@
-import Image from "next/image";
+"use client";
+import { useState, useEffect } from "react";
+import { db, auth } from "../lib/firebase";
+import { collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from "firebase/firestore"; // Importamos updateDoc
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
 
 export default function Home() {
+  const [usuario, setUsuario] = useState(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [errorLogin, setErrorLogin] = useState("");
+
+  const [productos, setProductos] = useState([]);
+  const [nombre, setNombre] = useState("");
+  const [precio, setPrecio] = useState("");
+  const [stock, setStock] = useState("");
+
+  // Estados para la Edición
+  const [editandoId, setEditandoId] = useState(null);
+  const [editNombre, setEditNombre] = useState("");
+  const [editPrecio, setEditPrecio] = useState("");
+  const [editStock, setEditStock] = useState("");
+
+  useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      setUsuario(user);
+    });
+    return () => unsubscribeAuth();
+  }, []);
+
+  useEffect(() => {
+    if (!usuario) return;
+    const unsubscribeDB = onSnapshot(collection(db, "productos"), (snapshot) => {
+      const listaProductos = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setProductos(listaProductos);
+    });
+    return () => unsubscribeDB();
+  }, [usuario]);
+
+  const iniciarSesion = async (e) => {
+    e.preventDefault();
+    setErrorLogin("");
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (error) {
+      setErrorLogin("Correo o contraseña incorrectos.");
+    }
+  };
+
+  const cerrarSesion = async () => {
+    await signOut(auth);
+  };
+
+  const agregarProducto = async (e) => {
+    e.preventDefault();
+    if (!nombre || !precio || !stock) return;
+    try {
+      await addDoc(collection(db, "productos"), {
+        nombre: nombre,
+        precio: Number(precio),
+        stock: Number(stock),
+      });
+      setNombre(""); setPrecio(""); setStock("");
+    } catch (error) {
+      console.error("Error al agregar:", error);
+    }
+  };
+
+  const eliminarProducto = async (id) => {
+    await deleteDoc(doc(db, "productos", id));
+  };
+
+  // --- NUEVA LÓGICA DE EDICIÓN ---
+  const iniciarEdicion = (producto) => {
+    setEditandoId(producto.id);
+    setEditNombre(producto.nombre);
+    setEditPrecio(producto.precio);
+    setEditStock(producto.stock);
+  };
+
+  const cancelarEdicion = () => {
+    setEditandoId(null);
+  };
+
+  const guardarEdicion = async (id) => {
+    try {
+      const productoRef = doc(db, "productos", id);
+      await updateDoc(productoRef, {
+        nombre: editNombre,
+        precio: Number(editPrecio),
+        stock: Number(editStock),
+      });
+      setEditandoId(null); // Salimos del modo edición
+    } catch (error) {
+      console.error("Error al actualizar:", error);
+    }
+  };
+
+  if (!usuario) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", backgroundColor: "#f4f4f9" }}>
+        <form onSubmit={iniciarSesion} style={{ background: "white", padding: "40px", borderRadius: "8px", boxShadow: "0 4px 10px rgba(0,0,0,0.1)", display: "flex", flexDirection: "column", gap: "15px", width: "300px" }}>
+          <h2 style={{ textAlign: "center", margin: "0 0 20px 0" }}>Villagra y Méndez</h2>
+          <input type="email" placeholder="Correo" value={email} onChange={(e) => setEmail(e.target.value)} style={{ padding: "10px", borderRadius: "4px", border: "1px solid #ccc" }} required />
+          <input type="password" placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} style={{ padding: "10px", borderRadius: "4px", border: "1px solid #ccc" }} required />
+          {errorLogin && <p style={{ color: "red", fontSize: "12px", margin: 0 }}>{errorLogin}</p>}
+          <button type="submit" style={{ padding: "10px", background: "#333", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}>Ingresar</button>
+        </form>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+    <div style={{ padding: "40px", fontFamily: "sans-serif", maxWidth: "900px", margin: "auto" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2px solid #eee", paddingBottom: "20px", marginBottom: "20px" }}>
+        <h1>📦 ERP - Villagra y Méndez</h1>
+        <button onClick={cerrarSesion} style={{ padding: "8px 16px", background: "#ff4d4f", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}>Cerrar Sesión</button>
+      </div>
+      
+      <form onSubmit={agregarProducto} style={{ display: "flex", gap: "10px", marginBottom: "30px" }}>
+        <input type="text" placeholder="Nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} style={{ padding: "8px", flex: 1 }} />
+        <input type="number" placeholder="Precio" value={precio} onChange={(e) => setPrecio(e.target.value)} style={{ padding: "8px", width: "100px" }} />
+        <input type="number" placeholder="Stock" value={stock} onChange={(e) => setStock(e.target.value)} style={{ padding: "8px", width: "100px" }} />
+        <button type="submit" style={{ padding: "8px 16px", background: "#0070f3", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer" }}>Agregar</button>
+      </form>
+
+      <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+        <thead>
+          <tr style={{ borderBottom: "2px solid #ccc", backgroundColor: "#f9f9f9" }}>
+            <th style={{ padding: "10px" }}>Nombre</th>
+            <th style={{ padding: "10px" }}>Precio ($)</th>
+            <th style={{ padding: "10px" }}>Stock</th>
+            <th style={{ padding: "10px" }}>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {productos.map((producto) => (
+            <tr key={producto.id} style={{ borderBottom: "1px solid #eee" }}>
+              {editandoId === producto.id ? (
+                // MODO EDICIÓN
+                <>
+                  <td style={{ padding: "10px" }}><input type="text" value={editNombre} onChange={(e) => setEditNombre(e.target.value)} style={{ padding: "4px", width: "100%" }} /></td>
+                  <td style={{ padding: "10px" }}><input type="number" value={editPrecio} onChange={(e) => setEditPrecio(e.target.value)} style={{ padding: "4px", width: "80px" }} /></td>
+                  <td style={{ padding: "10px" }}><input type="number" value={editStock} onChange={(e) => setEditStock(e.target.value)} style={{ padding: "4px", width: "80px" }} /></td>
+                  <td style={{ padding: "10px", display: "flex", gap: "5px" }}>
+                    <button onClick={() => guardarEdicion(producto.id)} style={{ background: "green", color: "white", border: "none", padding: "5px 10px", borderRadius: "4px", cursor: "pointer" }}>Guardar</button>
+                    <button onClick={cancelarEdicion} style={{ background: "gray", color: "white", border: "none", padding: "5px 10px", borderRadius: "4px", cursor: "pointer" }}>Cancelar</button>
+                  </td>
+                </>
+              ) : (
+                // MODO LECTURA
+                <>
+                  <td style={{ padding: "10px" }}>{producto.nombre}</td>
+                  <td style={{ padding: "10px" }}>{producto.precio}</td>
+                  <td style={{ padding: "10px" }}>{producto.stock}</td>
+                  <td style={{ padding: "10px", display: "flex", gap: "5px" }}>
+                    <button onClick={() => iniciarEdicion(producto)} style={{ background: "#f0ad4e", color: "white", border: "none", padding: "5px 10px", borderRadius: "4px", cursor: "pointer" }}>Editar</button>
+                    <button onClick={() => eliminarProducto(producto.id)} style={{ background: "red", color: "white", border: "none", padding: "5px 10px", borderRadius: "4px", cursor: "pointer" }}>Eliminar</button>
+                  </td>
+                </>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
