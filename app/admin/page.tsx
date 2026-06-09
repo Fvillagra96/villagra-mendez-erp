@@ -25,14 +25,13 @@ export default function AdminDashboard() {
   const [carrito, setCarrito] = useState<any[]>([]);
   const [nombreCliente, setNombreCliente] = useState("");
   const [rutCliente, setRutCliente] = useState("");
+  const [descuentoPedido, setDescuentoPedido] = useState(""); // NUEVO: Estado para ofertas
 
   // --- ESTADOS: FINANZAS ---
   const [movimientos, setMovimientos] = useState<any[]>([]);
-  const [tipoMovimiento, setTipoMovimiento] = useState("egreso"); // Ya no incluye 'cuota' libre
+  const [tipoMovimiento, setTipoMovimiento] = useState("egreso");
   const [montoMovimiento, setMontoMovimiento] = useState("");
   const [descMovimiento, setDescMovimiento] = useState("");
-  
-  // Nuevo estado para controlar a qué préstamo le abonamos
   const [prestamoSeleccionado, setPrestamoSeleccionado] = useState<any>(null);
   const [montoAbono, setMontoAbono] = useState("");
 
@@ -92,25 +91,66 @@ export default function AdminDashboard() {
   const agregarAlCarrito = (prod: any) => {
     const existe = carrito.find(item => item.id === prod.id);
     if (existe) {
-      if (existe.cantidad >= prod.stock) return alert("Sin stock.");
+      if (existe.cantidad >= prod.stock) return alert(`Solo tienes ${prod.stock} unidades en stock.`);
       setCarrito(carrito.map(item => item.id === prod.id ? { ...item, cantidad: item.cantidad + 1 } : item));
     } else {
       if (prod.stock > 0) setCarrito([...carrito, { ...prod, cantidad: 1 }]);
     }
   };
+
+  // NUEVA FUNCIÓN: Actualizar cantidad manualmente
+  const actualizarCantidadCarrito = (id: string, cantidad: string) => {
+    const nuevaCantidad = parseInt(cantidad) || 0;
+    
+    setCarrito(carrito.map(item => {
+      if (item.id === id) {
+        if (nuevaCantidad > item.stock) {
+          alert(`El stock máximo para este producto es ${item.stock}.`);
+          return { ...item, cantidad: item.stock };
+        }
+        return { ...item, cantidad: nuevaCantidad };
+      }
+      return item;
+    }).filter(item => item.cantidad > 0)); // Si la cantidad es 0, lo elimina del carrito
+  };
+
   const removerDelCarrito = (id: string) => setCarrito(carrito.filter(item => item.id !== id));
-  const totalPedido = carrito.reduce((total, item) => total + (item.precio * item.cantidad), 0);
+  
+  // CÁLCULOS DEL PEDIDO
+  const subtotalPedido = carrito.reduce((total, item) => total + (item.precio * item.cantidad), 0);
+  const descuentoAplicado = Number(descuentoPedido) || 0;
+  const totalPedido = Math.max(0, subtotalPedido - descuentoAplicado); // Evita que el total sea negativo
 
   const procesarVenta = async () => {
     if (carrito.length === 0) return alert("Carrito vacío");
     if (!nombreCliente) return alert("Ingresa el nombre del cliente");
+
     try {
       const fechaActual = new Date().toISOString();
-      await addDoc(collection(db, "pedidos"), { cliente: nombreCliente, rut: rutCliente, fecha: fechaActual, items: carrito, total: totalPedido, estado: "Completado" });
-      for (const item of carrito) { await updateDoc(doc(db, "productos", item.id), { stock: item.stock - item.cantidad }); }
-      await addDoc(collection(db, "finanzas"), { tipo: "venta", monto: totalPedido, descripcion: `Venta a ${nombreCliente}`, fecha: fechaActual });
+      await addDoc(collection(db, "pedidos"), { 
+        cliente: nombreCliente, 
+        rut: rutCliente, 
+        fecha: fechaActual, 
+        items: carrito, 
+        subtotal: subtotalPedido,
+        descuento: descuentoAplicado,
+        total: totalPedido, 
+        estado: "Completado" 
+      });
+      
+      for (const item of carrito) { 
+        await updateDoc(doc(db, "productos", item.id), { stock: item.stock - item.cantidad }); 
+      }
+      
+      await addDoc(collection(db, "finanzas"), { 
+        tipo: "venta", 
+        monto: totalPedido, 
+        descripcion: `Venta a ${nombreCliente} ${descuentoAplicado > 0 ? '(Con Oferta)' : ''}`, 
+        fecha: fechaActual 
+      });
+      
       alert("¡Venta registrada con éxito y enviada a Finanzas!");
-      setCarrito([]); setNombreCliente(""); setRutCliente("");
+      setCarrito([]); setNombreCliente(""); setRutCliente(""); setDescuentoPedido("");
     } catch (error) { alert("Hubo un error al registrar la venta."); }
   };
 
@@ -125,47 +165,24 @@ export default function AdminDashboard() {
   };
   const eliminarMovimiento = async (id: string) => { if(window.confirm("¿Eliminar registro?")) await deleteDoc(doc(db, "finanzas", id)); };
 
-  // Registrar un abono a un préstamo específico
   const registrarAbono = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!montoAbono || Number(montoAbono) <= 0) return alert("Ingresa un monto válido");
     if (Number(montoAbono) > prestamoSeleccionado.restante) return alert("El abono no puede ser mayor a la deuda restante");
-    
     try {
-      await addDoc(collection(db, "finanzas"), { 
-        tipo: "cuota", 
-        monto: Number(montoAbono), 
-        descripcion: `Abono a: ${prestamoSeleccionado.descripcion}`, 
-        prestamoId: prestamoSeleccionado.id, // Enlazamos el pago con el préstamo
-        fecha: new Date().toISOString() 
-      });
-      setPrestamoSeleccionado(null);
-      setMontoAbono("");
-      alert("Abono registrado con éxito");
+      await addDoc(collection(db, "finanzas"), { tipo: "cuota", monto: Number(montoAbono), descripcion: `Abono a: ${prestamoSeleccionado.descripcion}`, prestamoId: prestamoSeleccionado.id, fecha: new Date().toISOString() });
+      setPrestamoSeleccionado(null); setMontoAbono(""); alert("Abono registrado con éxito");
     } catch (error) { alert("Error al registrar el abono."); }
   };
 
-  // --- CÁLCULOS DE CUADRATURA ---
   const totalIngresos = movimientos.filter(m => ['ingreso', 'venta', 'prestamo'].includes(m.tipo)).reduce((acc, curr) => acc + curr.monto, 0);
   const totalEgresos = movimientos.filter(m => ['egreso', 'cuota'].includes(m.tipo)).reduce((acc, curr) => acc + curr.monto, 0);
   const saldoCaja = totalIngresos - totalEgresos;
 
-  // Mapear préstamos activos y calcular cuánto se ha pagado de cada uno
-  const prestamosActivos = movimientos
-    .filter(m => m.tipo === 'prestamo')
-    .map(prestamo => {
-      // Sumar todas las cuotas que tengan el ID de este préstamo
-      const pagado = movimientos
-        .filter(m => m.tipo === 'cuota' && m.prestamoId === prestamo.id)
-        .reduce((acc, curr) => acc + curr.monto, 0);
-      return {
-        ...prestamo,
-        pagado: pagado,
-        restante: prestamo.monto - pagado
-      };
-    })
-    .filter(p => p.restante > 0); // Mostrar solo los que aún tienen deuda
-
+  const prestamosActivos = movimientos.filter(m => m.tipo === 'prestamo').map(prestamo => {
+    const pagado = movimientos.filter(m => m.tipo === 'cuota' && m.prestamoId === prestamo.id).reduce((acc, curr) => acc + curr.monto, 0);
+    return { ...prestamo, pagado: pagado, restante: prestamo.monto - pagado };
+  }).filter(p => p.restante > 0); 
   const deudaTotalAcumulada = prestamosActivos.reduce((acc, curr) => acc + curr.restante, 0);
 
   // ==========================================
@@ -205,7 +222,7 @@ export default function AdminDashboard() {
           <button onClick={() => setVistaActiva('finanzas')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium ${vistaActiva === 'finanzas' ? 'bg-orange-600 text-white shadow-lg' : 'hover:bg-stone-800 hover:text-orange-400'}`}>💰 Finanzas</button>
         </nav>
         <div className="p-4 border-t border-stone-800 bg-stone-950">
-          <button onClick={cerrarSesion} className="w-full text-center px-4 py-3 text-sm font-bold text-stone-400 hover:text-white bg-stone-800 hover:bg-red-600 rounded-lg">Cerrar Sesión</button>
+          <button onClick={cerrarSesion} className="w-full text-center px-4 py-3 text-sm font-bold text-stone-400 hover:text-white bg-stone-800 hover:bg-red-600 rounded-lg transition-colors">Cerrar Sesión</button>
         </div>
       </aside>
 
@@ -273,39 +290,101 @@ export default function AdminDashboard() {
           {/* MÓDULO: PEDIDOS */}
           {vistaActiva === 'pedidos' && (
              <div className="max-w-6xl mx-auto flex flex-col lg:flex-row gap-8">
+               
+               {/* Catálogo */}
                <div className="flex-1 bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
                  <h3 className="text-lg font-bold text-stone-800 mb-4 border-b pb-2">Seleccionar Productos</h3>
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                    {productos.map(prod => (
-                     <div key={prod.id} className="border p-4 rounded-xl hover:border-orange-500 flex flex-col justify-between bg-stone-50">
-                       <div><h4 className="font-bold">{prod.nombre}</h4><p className="text-orange-600 font-black">${prod.precio.toLocaleString("es-CL")}</p></div>
+                     <div key={prod.id} className="border border-stone-200 p-4 rounded-xl hover:border-orange-500 flex flex-col justify-between bg-stone-50 transition-colors">
+                       <div>
+                         <h4 className="font-bold text-stone-800">{prod.nombre}</h4>
+                         <p className="text-orange-600 font-black">${prod.precio.toLocaleString("es-CL")}</p>
+                       </div>
                        <div className="mt-4 flex justify-between items-center">
                          <span className="text-xs font-bold text-stone-500">Stock: {prod.stock}</span>
-                         <button onClick={() => agregarAlCarrito(prod)} disabled={prod.stock <= 0} className={`px-4 py-2 rounded-lg font-bold text-sm ${prod.stock > 0 ? 'bg-stone-800 text-white' : 'bg-stone-200 text-stone-400'}`}>+ Agregar</button>
+                         <button 
+                           onClick={() => agregarAlCarrito(prod)} 
+                           disabled={prod.stock <= 0} 
+                           className={`px-4 py-2 rounded-lg font-bold text-sm ${prod.stock > 0 ? 'bg-stone-800 hover:bg-stone-900 text-white' : 'bg-stone-200 text-stone-400 cursor-not-allowed'}`}
+                         >
+                           + Agregar
+                         </button>
                        </div>
                      </div>
                    ))}
                  </div>
                </div>
+
+               {/* Carrito con Control de Cantidades y Ofertas */}
                <div className="w-full lg:w-96 bg-white p-6 rounded-2xl shadow-sm border border-stone-200 flex flex-col h-fit">
                  <h3 className="text-lg font-bold text-stone-800 mb-4 border-b pb-2">Venta Nueva</h3>
+                 
                  <div className="mb-4 space-y-3">
                    <input type="text" placeholder="Nombre Cliente *" value={nombreCliente} onChange={(e) => setNombreCliente(e.target.value)} className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 placeholder-stone-500 font-medium outline-none text-sm" />
                    <input type="text" placeholder="RUT (Opcional)" value={rutCliente} onChange={(e) => setRutCliente(e.target.value)} className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 placeholder-stone-500 font-medium outline-none text-sm" />
                  </div>
-                 <div className="flex-1 overflow-y-auto mb-4 min-h-[150px]">
-                   <ul className="space-y-3">
-                     {carrito.map((item, i) => (
-                       <li key={i} className="flex justify-between items-center text-sm border-b pb-2">
-                         <div><p className="font-bold">{item.nombre}</p><p className="text-stone-500">{item.cantidad} x ${item.precio.toLocaleString("es-CL")}</p></div>
-                         <div className="flex items-center gap-3"><span className="font-bold">${(item.precio * item.cantidad).toLocaleString("es-CL")}</span><button onClick={() => removerDelCarrito(item.id)} className="text-red-500">✖</button></div>
-                       </li>
-                     ))}
-                   </ul>
+
+                 {/* Lista de Items Editables */}
+                 <div className="flex-1 overflow-y-auto mb-4 min-h-[150px] border-b border-stone-100 pb-2">
+                   {carrito.length === 0 ? (
+                     <p className="text-stone-400 text-sm text-center mt-10 italic">Añade productos para comenzar</p>
+                   ) : (
+                     <ul className="space-y-4">
+                       {carrito.map((item) => (
+                         <li key={item.id} className="flex flex-col gap-2 p-3 bg-stone-50 rounded-lg border border-stone-200">
+                           <div className="flex justify-between items-start">
+                             <p className="font-bold text-stone-800 text-sm leading-tight">{item.nombre}</p>
+                             <button onClick={() => removerDelCarrito(item.id)} className="text-red-500 hover:bg-red-100 px-2 rounded font-bold">✖</button>
+                           </div>
+                           
+                           <div className="flex justify-between items-center">
+                             {/* Botones de control de cantidad */}
+                             <div className="flex items-center gap-1 bg-white border border-stone-300 rounded">
+                               <button onClick={() => actualizarCantidadCarrito(item.id, String(item.cantidad - 1))} className="px-2 py-1 text-stone-600 hover:bg-stone-100 font-bold">-</button>
+                               <input 
+                                 type="number" 
+                                 value={item.cantidad} 
+                                 onChange={(e) => actualizarCantidadCarrito(item.id, e.target.value)} 
+                                 className="w-10 text-center py-1 bg-transparent font-bold text-sm outline-none text-stone-800"
+                               />
+                               <button onClick={() => actualizarCantidadCarrito(item.id, String(item.cantidad + 1))} className="px-2 py-1 text-stone-600 hover:bg-stone-100 font-bold">+</button>
+                             </div>
+                             
+                             <span className="font-bold text-stone-800">${(item.precio * item.cantidad).toLocaleString("es-CL")}</span>
+                           </div>
+                         </li>
+                       ))}
+                     </ul>
+                   )}
                  </div>
-                 <div className="border-t pt-4">
-                   <div className="flex justify-between items-center mb-4"><span className="font-bold">Total:</span><span className="text-2xl font-black text-orange-600">${totalPedido.toLocaleString("es-CL")}</span></div>
-                   <button onClick={procesarVenta} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl">Confirmar Venta</button>
+
+                 {/* Sección de Totales y Ofertas */}
+                 <div className="pt-2">
+                   <div className="flex justify-between items-center mb-2">
+                     <span className="text-sm font-bold text-stone-500">Subtotal:</span>
+                     <span className="text-sm font-bold text-stone-800">${subtotalPedido.toLocaleString("es-CL")}</span>
+                   </div>
+                   
+                   <div className="flex justify-between items-center mb-4">
+                     <span className="text-sm font-bold text-orange-600">Oferta / Descuento ($):</span>
+                     <input 
+                       type="number" 
+                       placeholder="0" 
+                       value={descuentoPedido} 
+                       onChange={(e) => setDescuentoPedido(e.target.value)} 
+                       className="w-24 px-2 py-1 border border-orange-300 rounded focus:ring-2 focus:ring-orange-500 bg-orange-50 text-orange-800 font-bold outline-none text-right" 
+                     />
+                   </div>
+
+                   <div className="flex justify-between items-center mb-6 pt-3 border-t border-stone-200">
+                     <span className="text-lg font-bold text-stone-800">Total:</span>
+                     <span className="text-3xl font-black text-orange-600">${totalPedido.toLocaleString("es-CL")}</span>
+                   </div>
+
+                   <button onClick={procesarVenta} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl shadow-md transition-colors text-lg">
+                     Confirmar Venta
+                   </button>
                  </div>
                </div>
              </div>
@@ -330,7 +409,6 @@ export default function AdminDashboard() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* REGISTRO MANUAL DE INGRESOS/EGRESOS/PRÉSTAMOS */}
                 <section className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
                   <h3 className="text-lg font-bold text-stone-800 mb-5 border-b pb-2">Registrar Movimiento Libre</h3>
                   <form onSubmit={agregarMovimiento} className="flex flex-col gap-4">
@@ -345,16 +423,14 @@ export default function AdminDashboard() {
                   </form>
                 </section>
 
-                {/* PANEL DE GESTIÓN DE PRÉSTAMOS */}
                 <section className="bg-stone-100 p-6 rounded-2xl shadow-inner border border-stone-200">
                   <h3 className="text-lg font-bold text-stone-800 mb-5 border-b border-stone-300 pb-2">Gestión de Préstamos Activos</h3>
-                  
                   {prestamosActivos.length === 0 ? (
                     <p className="text-stone-500 text-sm italic text-center py-4">No tienes préstamos pendientes de pago.</p>
                   ) : (
                     <div className="space-y-4">
                       {prestamosActivos.map(p => (
-                        <div key={p.id} className="bg-white border border-stone-300 p-4 rounded-xl flex flex-col gap-3">
+                        <div key={p.id} className="bg-white border border-stone-300 p-4 rounded-xl flex flex-col gap-3 shadow-sm">
                           <div className="flex justify-between items-start">
                             <div>
                               <p className="font-bold text-stone-800">{p.descripcion}</p>
@@ -362,25 +438,14 @@ export default function AdminDashboard() {
                             </div>
                             <span className="bg-orange-100 text-orange-800 text-xs font-bold px-2 py-1 rounded">Deuda: ${p.restante.toLocaleString("es-CL")}</span>
                           </div>
-                          
-                          {/* Botón y Mini-formulario de abono */}
                           {prestamoSeleccionado?.id === p.id ? (
                             <form onSubmit={registrarAbono} className="flex gap-2 mt-2">
-                              <input 
-                                type="number" 
-                                placeholder="Monto a abonar" 
-                                value={montoAbono} 
-                                onChange={(e) => setMontoAbono(e.target.value)} 
-                                className="flex-1 px-3 py-2 border border-stone-300 rounded focus:ring-2 focus:ring-orange-500 text-sm"
-                                max={p.restante}
-                              />
-                              <button type="submit" className="bg-emerald-500 text-white font-bold px-3 py-2 rounded text-sm">Guardar Abono</button>
-                              <button type="button" onClick={() => {setPrestamoSeleccionado(null); setMontoAbono("")}} className="bg-stone-300 text-stone-700 font-bold px-3 py-2 rounded text-sm">Cancelar</button>
+                              <input type="number" placeholder="Monto a abonar" value={montoAbono} onChange={(e) => setMontoAbono(e.target.value)} className="flex-1 px-3 py-2 border border-stone-300 rounded focus:ring-2 focus:ring-orange-500 text-sm bg-white outline-none" max={p.restante} />
+                              <button type="submit" className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-3 py-2 rounded text-sm transition-colors">Guardar</button>
+                              <button type="button" onClick={() => {setPrestamoSeleccionado(null); setMontoAbono("")}} className="bg-stone-300 hover:bg-stone-400 text-stone-700 font-bold px-3 py-2 rounded text-sm transition-colors">Cancelar</button>
                             </form>
                           ) : (
-                            <button onClick={() => setPrestamoSeleccionado(p)} className="w-full bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold py-2 rounded-lg text-sm transition-colors mt-1">
-                              💳 Abonar a este crédito
-                            </button>
+                            <button onClick={() => setPrestamoSeleccionado(p)} className="w-full bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold py-2 rounded-lg text-sm transition-colors mt-1">💳 Abonar a este crédito</button>
                           )}
                         </div>
                       ))}
@@ -389,7 +454,6 @@ export default function AdminDashboard() {
                 </section>
               </div>
 
-              {/* HISTORIAL */}
               <section className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden">
                 <div className="px-6 py-4 border-b border-stone-100 bg-stone-50"><h3 className="font-bold text-stone-800">Historial de Transacciones</h3></div>
                 <table className="w-full text-left">
