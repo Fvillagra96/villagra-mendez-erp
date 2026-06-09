@@ -28,9 +28,13 @@ export default function AdminDashboard() {
 
   // --- ESTADOS: FINANZAS ---
   const [movimientos, setMovimientos] = useState<any[]>([]);
-  const [tipoMovimiento, setTipoMovimiento] = useState("egreso");
+  const [tipoMovimiento, setTipoMovimiento] = useState("egreso"); // Ya no incluye 'cuota' libre
   const [montoMovimiento, setMontoMovimiento] = useState("");
   const [descMovimiento, setDescMovimiento] = useState("");
+  
+  // Nuevo estado para controlar a qué préstamo le abonamos
+  const [prestamoSeleccionado, setPrestamoSeleccionado] = useState<any>(null);
+  const [montoAbono, setMontoAbono] = useState("");
 
   // --- EFECTOS ---
   useEffect(() => {
@@ -121,12 +125,48 @@ export default function AdminDashboard() {
   };
   const eliminarMovimiento = async (id: string) => { if(window.confirm("¿Eliminar registro?")) await deleteDoc(doc(db, "finanzas", id)); };
 
+  // Registrar un abono a un préstamo específico
+  const registrarAbono = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!montoAbono || Number(montoAbono) <= 0) return alert("Ingresa un monto válido");
+    if (Number(montoAbono) > prestamoSeleccionado.restante) return alert("El abono no puede ser mayor a la deuda restante");
+    
+    try {
+      await addDoc(collection(db, "finanzas"), { 
+        tipo: "cuota", 
+        monto: Number(montoAbono), 
+        descripcion: `Abono a: ${prestamoSeleccionado.descripcion}`, 
+        prestamoId: prestamoSeleccionado.id, // Enlazamos el pago con el préstamo
+        fecha: new Date().toISOString() 
+      });
+      setPrestamoSeleccionado(null);
+      setMontoAbono("");
+      alert("Abono registrado con éxito");
+    } catch (error) { alert("Error al registrar el abono."); }
+  };
+
+  // --- CÁLCULOS DE CUADRATURA ---
   const totalIngresos = movimientos.filter(m => ['ingreso', 'venta', 'prestamo'].includes(m.tipo)).reduce((acc, curr) => acc + curr.monto, 0);
   const totalEgresos = movimientos.filter(m => ['egreso', 'cuota'].includes(m.tipo)).reduce((acc, curr) => acc + curr.monto, 0);
   const saldoCaja = totalIngresos - totalEgresos;
-  const prestamosTomados = movimientos.filter(m => m.tipo === 'prestamo').reduce((acc, curr) => acc + curr.monto, 0);
-  const cuotasPagadas = movimientos.filter(m => m.tipo === 'cuota').reduce((acc, curr) => acc + curr.monto, 0);
-  const deudaActual = prestamosTomados - cuotasPagadas;
+
+  // Mapear préstamos activos y calcular cuánto se ha pagado de cada uno
+  const prestamosActivos = movimientos
+    .filter(m => m.tipo === 'prestamo')
+    .map(prestamo => {
+      // Sumar todas las cuotas que tengan el ID de este préstamo
+      const pagado = movimientos
+        .filter(m => m.tipo === 'cuota' && m.prestamoId === prestamo.id)
+        .reduce((acc, curr) => acc + curr.monto, 0);
+      return {
+        ...prestamo,
+        pagado: pagado,
+        restante: prestamo.monto - pagado
+      };
+    })
+    .filter(p => p.restante > 0); // Mostrar solo los que aún tienen deuda
+
+  const deudaTotalAcumulada = prestamosActivos.reduce((acc, curr) => acc + curr.restante, 0);
 
   // ==========================================
   // RENDERIZADO (LOGIN)
@@ -137,7 +177,6 @@ export default function AdminDashboard() {
         <form onSubmit={iniciarSesion} className="bg-white p-10 rounded-2xl shadow-xl w-full max-w-md flex flex-col gap-6 border-t-4 border-orange-500">
           <div className="text-center mb-2"><h2 className="text-3xl font-extrabold text-stone-800">Administración</h2><p className="text-sm text-stone-500 mt-2 font-medium">Villagra & Méndez</p></div>
           <div className="flex flex-col gap-4">
-            {/* TEXTBOX ARREGLADOS CON CONTRASTE */}
             <input type="email" placeholder="Correo electrónico" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full px-4 py-3 border border-stone-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 placeholder-stone-500 font-medium outline-none" />
             <input type="password" placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} required className="w-full px-4 py-3 border border-stone-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 placeholder-stone-500 font-medium outline-none" />
           </div>
@@ -187,7 +226,6 @@ export default function AdminDashboard() {
               <section className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
                 <h3 className="text-lg font-bold text-stone-800 mb-5 text-orange-600">Agregar Insumo o Producto</h3>
                 <form onSubmit={agregarProducto} className="flex flex-col md:flex-row gap-4">
-                  {/* TEXTBOX ARREGLADOS */}
                   <input type="text" placeholder="Nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} className="flex-1 px-4 py-3 border border-stone-300 rounded-xl focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 placeholder-stone-500 font-medium outline-none" />
                   <input type="number" placeholder="Precio" value={precio} onChange={(e) => setPrecio(e.target.value)} className="w-36 px-4 py-3 border border-stone-300 rounded-xl focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 placeholder-stone-500 font-medium outline-none" />
                   <input type="number" placeholder="Stock" value={stock} onChange={(e) => setStock(e.target.value)} className="w-32 px-4 py-3 border border-stone-300 rounded-xl focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 placeholder-stone-500 font-medium outline-none" />
@@ -252,7 +290,6 @@ export default function AdminDashboard() {
                <div className="w-full lg:w-96 bg-white p-6 rounded-2xl shadow-sm border border-stone-200 flex flex-col h-fit">
                  <h3 className="text-lg font-bold text-stone-800 mb-4 border-b pb-2">Venta Nueva</h3>
                  <div className="mb-4 space-y-3">
-                   {/* TEXTBOX ARREGLADOS */}
                    <input type="text" placeholder="Nombre Cliente *" value={nombreCliente} onChange={(e) => setNombreCliente(e.target.value)} className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 placeholder-stone-500 font-medium outline-none text-sm" />
                    <input type="text" placeholder="RUT (Opcional)" value={rutCliente} onChange={(e) => setRutCliente(e.target.value)} className="w-full px-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 placeholder-stone-500 font-medium outline-none text-sm" />
                  </div>
@@ -287,27 +324,72 @@ export default function AdminDashboard() {
                   <p className="text-3xl font-black mt-2 text-stone-700">${totalEgresos.toLocaleString("es-CL")}</p>
                 </div>
                 <div className="bg-orange-50 p-6 rounded-2xl shadow-sm border border-orange-200">
-                  <h4 className="text-sm font-bold text-stone-500 uppercase tracking-wide">Deuda Préstamos</h4>
-                  <p className="text-3xl font-black mt-2 text-orange-700">${deudaActual.toLocaleString("es-CL")}</p>
+                  <h4 className="text-sm font-bold text-stone-500 uppercase tracking-wide">Deuda Préstamos Activos</h4>
+                  <p className="text-3xl font-black mt-2 text-orange-700">${deudaTotalAcumulada.toLocaleString("es-CL")}</p>
                 </div>
               </div>
 
-              <section className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
-                <h3 className="text-lg font-bold text-stone-800 mb-5">Registrar Nuevo Movimiento</h3>
-                <form onSubmit={agregarMovimiento} className="flex flex-col md:flex-row gap-4">
-                  {/* TEXTBOX ARREGLADOS */}
-                  <select value={tipoMovimiento} onChange={(e) => setTipoMovimiento(e.target.value)} className="px-4 py-3 border border-stone-300 rounded-xl focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-bold outline-none cursor-pointer">
-                    <option value="egreso">💸 Registrar Gasto (Egreso)</option>
-                    <option value="ingreso">💰 Registrar Ingreso Extra</option>
-                    <option value="prestamo">🏦 Tomar Préstamo</option>
-                    <option value="cuota">💳 Pagar Cuota Préstamo</option>
-                  </select>
-                  <input type="number" placeholder="Monto ($)" value={montoMovimiento} onChange={(e) => setMontoMovimiento(e.target.value)} className="w-full md:w-48 px-4 py-3 border border-stone-300 rounded-xl focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 placeholder-stone-500 font-medium outline-none" />
-                  <input type="text" placeholder="Descripción (Ej: Compra de frascos)" value={descMovimiento} onChange={(e) => setDescMovimiento(e.target.value)} className="flex-1 px-4 py-3 border border-stone-300 rounded-xl focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 placeholder-stone-500 font-medium outline-none" />
-                  <button type="submit" className="bg-stone-800 hover:bg-stone-900 text-white font-bold px-8 py-3 rounded-xl shadow-md">Registrar</button>
-                </form>
-              </section>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* REGISTRO MANUAL DE INGRESOS/EGRESOS/PRÉSTAMOS */}
+                <section className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
+                  <h3 className="text-lg font-bold text-stone-800 mb-5 border-b pb-2">Registrar Movimiento Libre</h3>
+                  <form onSubmit={agregarMovimiento} className="flex flex-col gap-4">
+                    <select value={tipoMovimiento} onChange={(e) => setTipoMovimiento(e.target.value)} className="px-4 py-3 border border-stone-300 rounded-xl focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 font-bold outline-none cursor-pointer">
+                      <option value="egreso">💸 Gasto General (Egreso)</option>
+                      <option value="ingreso">💰 Ingreso Extra</option>
+                      <option value="prestamo">🏦 Tomar Nuevo Préstamo</option>
+                    </select>
+                    <input type="number" placeholder="Monto ($)" value={montoMovimiento} onChange={(e) => setMontoMovimiento(e.target.value)} className="w-full px-4 py-3 border border-stone-300 rounded-xl focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 placeholder-stone-500 font-medium outline-none" />
+                    <input type="text" placeholder="Descripción breve" value={descMovimiento} onChange={(e) => setDescMovimiento(e.target.value)} className="w-full px-4 py-3 border border-stone-300 rounded-xl focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 placeholder-stone-500 font-medium outline-none" />
+                    <button type="submit" className="bg-stone-800 hover:bg-stone-900 text-white font-bold py-3 rounded-xl shadow-md">Registrar Movimiento</button>
+                  </form>
+                </section>
 
+                {/* PANEL DE GESTIÓN DE PRÉSTAMOS */}
+                <section className="bg-stone-100 p-6 rounded-2xl shadow-inner border border-stone-200">
+                  <h3 className="text-lg font-bold text-stone-800 mb-5 border-b border-stone-300 pb-2">Gestión de Préstamos Activos</h3>
+                  
+                  {prestamosActivos.length === 0 ? (
+                    <p className="text-stone-500 text-sm italic text-center py-4">No tienes préstamos pendientes de pago.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {prestamosActivos.map(p => (
+                        <div key={p.id} className="bg-white border border-stone-300 p-4 rounded-xl flex flex-col gap-3">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="font-bold text-stone-800">{p.descripcion}</p>
+                              <p className="text-xs text-stone-500">Monto Original: ${p.monto.toLocaleString("es-CL")}</p>
+                            </div>
+                            <span className="bg-orange-100 text-orange-800 text-xs font-bold px-2 py-1 rounded">Deuda: ${p.restante.toLocaleString("es-CL")}</span>
+                          </div>
+                          
+                          {/* Botón y Mini-formulario de abono */}
+                          {prestamoSeleccionado?.id === p.id ? (
+                            <form onSubmit={registrarAbono} className="flex gap-2 mt-2">
+                              <input 
+                                type="number" 
+                                placeholder="Monto a abonar" 
+                                value={montoAbono} 
+                                onChange={(e) => setMontoAbono(e.target.value)} 
+                                className="flex-1 px-3 py-2 border border-stone-300 rounded focus:ring-2 focus:ring-orange-500 text-sm"
+                                max={p.restante}
+                              />
+                              <button type="submit" className="bg-emerald-500 text-white font-bold px-3 py-2 rounded text-sm">Guardar Abono</button>
+                              <button type="button" onClick={() => {setPrestamoSeleccionado(null); setMontoAbono("")}} className="bg-stone-300 text-stone-700 font-bold px-3 py-2 rounded text-sm">Cancelar</button>
+                            </form>
+                          ) : (
+                            <button onClick={() => setPrestamoSeleccionado(p)} className="w-full bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold py-2 rounded-lg text-sm transition-colors mt-1">
+                              💳 Abonar a este crédito
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </div>
+
+              {/* HISTORIAL */}
               <section className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden">
                 <div className="px-6 py-4 border-b border-stone-100 bg-stone-50"><h3 className="font-bold text-stone-800">Historial de Transacciones</h3></div>
                 <table className="w-full text-left">
