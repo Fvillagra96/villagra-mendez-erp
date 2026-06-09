@@ -110,8 +110,22 @@ export default function Home() {
             <p className="text-sm text-stone-500 mt-2 font-medium">Gestión de Productos Artesanales</p>
           </div>
           <div className="flex flex-col gap-4">
-            <input type="email" placeholder="Correo electrónico" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full px-4 py-3 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-stone-50" />
-            <input type="password" placeholder="Contraseña" value={password} onChange={(e) => setPassword(e.target.value)} required className="w-full px-4 py-3 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-stone-50" />
+            <input 
+              type="email" 
+              placeholder="Correo electrónico" 
+              value={email} 
+              onChange={(e) => setEmail(e.target.value)} 
+              required 
+              className="w-full px-4 py-3 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 placeholder-stone-400 shadow-sm transition-all" 
+            />
+            <input 
+              type="password" 
+              placeholder="Contraseña" 
+              value={password} 
+              onChange={(e) => setPassword(e.target.value)} 
+              required 
+              className="w-full px-4 py-3 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white text-stone-900 placeholder-stone-400 shadow-sm transition-all" 
+            />
           </div>
           {errorLogin && <p className="text-red-600 text-sm font-medium text-center bg-red-100 p-2 rounded-md border border-red-200">{errorLogin}</p>}
           <button type="submit" className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-lg transition-colors mt-2 shadow-md">Ingresar al Sistema</button>
@@ -126,7 +140,7 @@ export default function Home() {
   return (
     <div className="flex h-screen bg-stone-50 font-sans text-stone-800 overflow-hidden">
       
-      {/* MENÚ LATERAL (SIDEBAR) - Tono piedra oscuro */}
+      {/* MENÚ LATERAL (SIDEBAR) */}
       <aside className="w-64 bg-stone-900 text-stone-300 flex flex-col shadow-xl z-20">
         <div className="p-6 border-b border-stone-800 bg-stone-950">
           <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
@@ -136,22 +150,13 @@ export default function Home() {
         </div>
         
         <nav className="flex-1 p-4 space-y-3">
-          <button 
-            onClick={() => setVistaActiva('inventario')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${vistaActiva === 'inventario' ? 'bg-orange-600 text-white shadow-lg shadow-orange-900/50' : 'hover:bg-stone-800 hover:text-orange-400'}`}
-          >
+          <button onClick={() => setVistaActiva('inventario')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${vistaActiva === 'inventario' ? 'bg-orange-600 text-white shadow-lg shadow-orange-900/50' : 'hover:bg-stone-800 hover:text-orange-400'}`}>
             <span className="text-xl">📦</span> Inventario
           </button>
-          <button 
-            onClick={() => setVistaActiva('pedidos')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${vistaActiva === 'pedidos' ? 'bg-orange-600 text-white shadow-lg shadow-orange-900/50' : 'hover:bg-stone-800 hover:text-orange-400'}`}
-          >
+          <button onClick={() => setVistaActiva('pedidos')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${vistaActiva === 'pedidos' ? 'bg-orange-600 text-white shadow-lg shadow-orange-900/50' : 'hover:bg-stone-800 hover:text-orange-400'}`}>
             <span className="text-xl">📝</span> Pedidos
           </button>
-          <button 
-            onClick={() => setVistaActiva('finanzas')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${vistaActiva === 'finanzas' ? 'bg-orange-600 text-white shadow-lg shadow-orange-900/50' : 'hover:bg-stone-800 hover:text-orange-400'}`}
-          >
+          <button onClick={() => setVistaActiva('finanzas')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${vistaActiva === 'finanzas' ? 'bg-orange-600 text-white shadow-lg shadow-orange-900/50' : 'hover:bg-stone-800 hover:text-orange-400'}`}>
             <span className="text-xl">💰</span> Finanzas
           </button>
         </nav>
@@ -165,8 +170,6 @@ export default function Home() {
 
       {/* CONTENIDO PRINCIPAL */}
       <main className="flex-1 flex flex-col overflow-hidden">
-        
-        {/* Cabecera dinámica */}
         <header className="bg-white shadow-sm border-b border-stone-200 px-8 py-5 flex justify-between items-center z-10">
           <h2 className="text-2xl font-bold text-stone-800 capitalize flex items-center gap-3">
             {vistaActiva === 'inventario' && <><span className="bg-orange-100 text-orange-600 p-2 rounded-lg">📦</span> Control de Inventario</>}
@@ -175,23 +178,22 @@ export default function Home() {
           </h2>
         </header>
 
-        {/* Área de trabajo con Scroll */}
         <div className="flex-1 overflow-y-auto p-8">
           
           {/* MÓDULO: INVENTARIO */}
           {vistaActiva === 'inventario' && (
             <div className="max-w-5xl mx-auto space-y-8">
-              <section className="bg-white p-6 rounded-2xl shadow-sm border border-stone-100">
+              <section className="bg-white p-6 rounded-2xl shadow-sm border border-stone-200">
                 <h3 className="text-lg font-bold text-stone-800 mb-5 text-orange-600">Agregar Nuevo Insumo o Producto</h3>
                 <form onSubmit={agregarProducto} className="flex flex-col md:flex-row gap-4">
-                  <input type="text" placeholder="Nombre del producto" value={nombre} onChange={(e) => setNombre(e.target.value)} className="flex-1 px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none bg-stone-50" />
-                  <input type="number" placeholder="Precio ($)" value={precio} onChange={(e) => setPrecio(e.target.value)} className="w-full md:w-36 px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none bg-stone-50" />
-                  <input type="number" placeholder="Stock" value={stock} onChange={(e) => setStock(e.target.value)} className="w-full md:w-32 px-4 py-3 border border-stone-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none bg-stone-50" />
+                  <input type="text" placeholder="Nombre del producto" value={nombre} onChange={(e) => setNombre(e.target.value)} className="flex-1 px-4 py-3 border border-stone-300 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none bg-white text-stone-900 placeholder-stone-400 shadow-sm" />
+                  <input type="number" placeholder="Precio ($)" value={precio} onChange={(e) => setPrecio(e.target.value)} className="w-full md:w-36 px-4 py-3 border border-stone-300 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none bg-white text-stone-900 placeholder-stone-400 shadow-sm" />
+                  <input type="number" placeholder="Stock" value={stock} onChange={(e) => setStock(e.target.value)} className="w-full md:w-32 px-4 py-3 border border-stone-300 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none bg-white text-stone-900 placeholder-stone-400 shadow-sm" />
                   <button type="submit" className="bg-stone-800 hover:bg-stone-900 text-white font-bold px-8 py-3 rounded-xl transition-all shadow-md hover:shadow-lg">Guardar</button>
                 </form>
               </section>
 
-              <section className="bg-white rounded-2xl shadow-sm border border-stone-100 overflow-hidden">
+              <section className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden">
                 <table className="w-full text-left">
                   <thead className="bg-stone-100 border-b border-stone-200 text-stone-600 text-sm uppercase font-bold tracking-wider">
                     <tr>
@@ -206,9 +208,9 @@ export default function Home() {
                       <tr key={producto.id} className="hover:bg-amber-50/50 transition-colors">
                         {editandoId === producto.id ? (
                           <>
-                            <td className="px-6 py-4"><input type="text" value={editNombre} onChange={(e) => setEditNombre(e.target.value)} className="w-full px-3 py-2 border border-orange-300 rounded-lg shadow-inner focus:ring-2 focus:ring-orange-500 outline-none" /></td>
-                            <td className="px-6 py-4"><input type="number" value={editPrecio} onChange={(e) => setEditPrecio(e.target.value)} className="w-28 px-3 py-2 border border-orange-300 rounded-lg shadow-inner focus:ring-2 focus:ring-orange-500 outline-none" /></td>
-                            <td className="px-6 py-4"><input type="number" value={editStock} onChange={(e) => setEditStock(e.target.value)} className="w-24 px-3 py-2 border border-orange-300 rounded-lg shadow-inner focus:ring-2 focus:ring-orange-500 outline-none" /></td>
+                            <td className="px-6 py-4"><input type="text" value={editNombre} onChange={(e) => setEditNombre(e.target.value)} className="w-full px-3 py-2 border border-stone-400 rounded-lg shadow-inner focus:ring-2 focus:ring-orange-500 outline-none bg-white text-stone-900" /></td>
+                            <td className="px-6 py-4"><input type="number" value={editPrecio} onChange={(e) => setEditPrecio(e.target.value)} className="w-28 px-3 py-2 border border-stone-400 rounded-lg shadow-inner focus:ring-2 focus:ring-orange-500 outline-none bg-white text-stone-900" /></td>
+                            <td className="px-6 py-4"><input type="number" value={editStock} onChange={(e) => setEditStock(e.target.value)} className="w-24 px-3 py-2 border border-stone-400 rounded-lg shadow-inner focus:ring-2 focus:ring-orange-500 outline-none bg-white text-stone-900" /></td>
                             <td className="px-6 py-4 text-right flex justify-end gap-2">
                               <button onClick={() => guardarEdicion(producto.id)} className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-4 py-2 rounded-lg shadow-sm transition-colors">✔</button>
                               <button onClick={cancelarEdicion} className="bg-stone-200 hover:bg-stone-300 text-stone-700 font-bold px-4 py-2 rounded-lg shadow-sm transition-colors">✖</button>
@@ -239,8 +241,8 @@ export default function Home() {
 
           {/* MÓDULO: PEDIDOS */}
           {vistaActiva === 'pedidos' && (
-            <div className="max-w-5xl mx-auto bg-white p-12 rounded-3xl shadow-sm border border-stone-100 flex flex-col items-center justify-center text-center mt-10">
-              <div className="bg-orange-100 p-6 rounded-full mb-6">
+            <div className="max-w-5xl mx-auto bg-white p-12 rounded-3xl shadow-sm border border-stone-200 flex flex-col items-center justify-center text-center mt-10">
+              <div className="bg-orange-100 p-6 rounded-full mb-6 shadow-inner">
                 <span className="text-6xl block">📝</span>
               </div>
               <h3 className="text-3xl font-black text-stone-800 mb-4">Área de Pedidos</h3>
@@ -252,8 +254,8 @@ export default function Home() {
 
           {/* MÓDULO: FINANZAS */}
           {vistaActiva === 'finanzas' && (
-            <div className="max-w-5xl mx-auto bg-white p-12 rounded-3xl shadow-sm border border-stone-100 flex flex-col items-center justify-center text-center mt-10">
-              <div className="bg-emerald-100 p-6 rounded-full mb-6">
+            <div className="max-w-5xl mx-auto bg-white p-12 rounded-3xl shadow-sm border border-stone-200 flex flex-col items-center justify-center text-center mt-10">
+              <div className="bg-emerald-100 p-6 rounded-full mb-6 shadow-inner">
                 <span className="text-6xl block">💰</span>
               </div>
               <h3 className="text-3xl font-black text-stone-800 mb-4">Resumen de Finanzas</h3>
