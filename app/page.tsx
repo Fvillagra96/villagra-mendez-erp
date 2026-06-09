@@ -43,7 +43,7 @@ export default function TiendaPublica() {
 
       {/* Banner Principal */}
       <section className="bg-orange-600 text-white py-16 px-8 text-center shadow-inner">
-        <h2 className="text-4xl md:text-5xl font-extrabold mb-4 drop-shadow-md">Nuestra Selección Artesanal</h2>
+        <h2 className="text-4xl md:text-5xl font-extrabold mb-4 drop-shadow-md">Nuestra Selección Artesanal y Cacero</h2>
         <p className="text-lg md:text-xl font-medium max-w-2xl mx-auto text-orange-100">
           Descubre nuestra línea de productos hechos con dedicación, tradición familiar y la mejor calidad.
         </p>
