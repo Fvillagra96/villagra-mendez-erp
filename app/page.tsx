@@ -1,22 +1,23 @@
 "use client";
 import { useState, useEffect } from "react";
 import { db, auth } from "../lib/firebase";
-import { collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from "firebase/firestore"; // Importamos updateDoc
-import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
+import { collection, addDoc, onSnapshot, deleteDoc, doc, updateDoc } from "firebase/firestore"; 
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged, User } from "firebase/auth"; // Importamos 'User'
 
 export default function Home() {
-  const [usuario, setUsuario] = useState(null);
+  // Le decimos a TypeScript que esto puede ser un User o null
+  const [usuario, setUsuario] = useState<User | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorLogin, setErrorLogin] = useState("");
 
-  const [productos, setProductos] = useState([]);
+  // Le decimos que productos es un arreglo de cualquier cosa (any[])
+  const [productos, setProductos] = useState<any[]>([]);
   const [nombre, setNombre] = useState("");
   const [precio, setPrecio] = useState("");
   const [stock, setStock] = useState("");
 
-  // Estados para la Edición
-  const [editandoId, setEditandoId] = useState(null);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
   const [editNombre, setEditNombre] = useState("");
   const [editPrecio, setEditPrecio] = useState("");
   const [editStock, setEditStock] = useState("");
@@ -40,7 +41,8 @@ export default function Home() {
     return () => unsubscribeDB();
   }, [usuario]);
 
-  const iniciarSesion = async (e) => {
+  // Agregamos React.FormEvent para los eventos de formulario
+  const iniciarSesion = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorLogin("");
     try {
@@ -54,7 +56,7 @@ export default function Home() {
     await signOut(auth);
   };
 
-  const agregarProducto = async (e) => {
+  const agregarProducto = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nombre || !precio || !stock) return;
     try {
@@ -69,12 +71,12 @@ export default function Home() {
     }
   };
 
-  const eliminarProducto = async (id) => {
+  const eliminarProducto = async (id: string) => {
     await deleteDoc(doc(db, "productos", id));
   };
 
-  // --- NUEVA LÓGICA DE EDICIÓN ---
-  const iniciarEdicion = (producto) => {
+  // Agregamos tipo 'any' para el producto temporalmente
+  const iniciarEdicion = (producto: any) => {
     setEditandoId(producto.id);
     setEditNombre(producto.nombre);
     setEditPrecio(producto.precio);
@@ -85,7 +87,7 @@ export default function Home() {
     setEditandoId(null);
   };
 
-  const guardarEdicion = async (id) => {
+  const guardarEdicion = async (id: string) => {
     try {
       const productoRef = doc(db, "productos", id);
       await updateDoc(productoRef, {
@@ -93,7 +95,7 @@ export default function Home() {
         precio: Number(editPrecio),
         stock: Number(editStock),
       });
-      setEditandoId(null); // Salimos del modo edición
+      setEditandoId(null);
     } catch (error) {
       console.error("Error al actualizar:", error);
     }
@@ -140,7 +142,6 @@ export default function Home() {
           {productos.map((producto) => (
             <tr key={producto.id} style={{ borderBottom: "1px solid #eee" }}>
               {editandoId === producto.id ? (
-                // MODO EDICIÓN
                 <>
                   <td style={{ padding: "10px" }}><input type="text" value={editNombre} onChange={(e) => setEditNombre(e.target.value)} style={{ padding: "4px", width: "100%" }} /></td>
                   <td style={{ padding: "10px" }}><input type="number" value={editPrecio} onChange={(e) => setEditPrecio(e.target.value)} style={{ padding: "4px", width: "80px" }} /></td>
@@ -151,7 +152,6 @@ export default function Home() {
                   </td>
                 </>
               ) : (
-                // MODO LECTURA
                 <>
                   <td style={{ padding: "10px" }}>{producto.nombre}</td>
                   <td style={{ padding: "10px" }}>{producto.precio}</td>
